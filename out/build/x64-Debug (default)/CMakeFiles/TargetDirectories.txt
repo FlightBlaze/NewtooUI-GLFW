@@ -1,0 +1,3 @@
+C:/Users/blaze/source/repos/MyProject/out/build/x64-Debug (default)/CMakeFiles/edit_cache.dir
+C:/Users/blaze/source/repos/MyProject/out/build/x64-Debug (default)/CMakeFiles/MyProject.dir
+C:/Users/blaze/source/repos/MyProject/out/build/x64-Debug (default)/CMakeFiles/rebuild_cache.dir
