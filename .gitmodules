@@ -1,0 +1,9 @@
+[submodule "submodules/DiligentCore"]
+	path = submodules/DiligentCore
+	url = https://github.com/DiligentGraphics/DiligentCore
+[submodule "submodules/glm"]
+	path = submodules/glm
+	url = https://github.com/g-truc/glm
+[submodule "submodules/glfw"]
+	path = submodules/glfw
+	url = https://github.com/glfw/glfw
