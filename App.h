@@ -8,6 +8,13 @@
 #include "Graphics/GraphicsEngine/interface/SwapChain.h"
 #include "Common/interface/RefCntAutoPtr.hpp"
 
+#include <glm/glm.hpp>
+
+struct Vertex {
+    glm::vec3 pos;
+    glm::vec4 color;
+};
+
 class App {
 public:
     int run();
@@ -29,45 +36,55 @@ private:
     float mDeltaTime;
 
     GLFWwindow* mWindow;
+    int mWidth, mHeight;
 
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice>  mDevice;
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> mImmediateContext;
     Diligent::RefCntAutoPtr<Diligent::ISwapChain> mSwapChain;
     Diligent::RefCntAutoPtr<Diligent::IPipelineState> mPSO;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> mVSConstants;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> mQuadVertexBuffer;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> mQuadIndexBuffer;
+    Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> mSRB;
+    glm::mat4  mModelViewProjection;
+    float mRotation;
 };
 
 static const char* VSSource = R"(
-struct PSInput 
-{ 
-    float4 Pos   : SV_POSITION; 
-    float3 Color : COLOR; 
-};
-void main(in  uint    VertId : SV_VertexID,
-          out PSInput PSIn) 
+cbuffer Constants
 {
-    float4 Pos[3];
-    Pos[0] = float4(-0.5, -0.5, 0.0, 1.0);
-    Pos[1] = float4( 0.0, +0.5, 0.0, 1.0);
-    Pos[2] = float4(+0.5, -0.5, 0.0, 1.0);
-    float3 Col[3];
-    Col[0] = float3(1.0, 0.0, 0.0); // red
-    Col[1] = float3(0.0, 1.0, 0.0); // green
-    Col[2] = float3(0.0, 0.0, 1.0); // blue
-    PSIn.Pos   = Pos[VertId];
-    PSIn.Color = Col[VertId];
+    float4x4 g_ModelViewProj;
+};
+
+struct VSInput
+{
+    float3 Pos   : ATTRIB0;
+    float4 Color : ATTRIB1;
+};
+
+struct PSInput
+{
+    float4 Pos   : SV_POSITION;
+    float4 Color : COLOR0;
+};
+
+void main(in  VSInput VSIn,
+          out PSInput PSIn)
+{
+    PSIn.Pos   = mul( float4(VSIn.Pos,1.0), g_ModelViewProj);
+    PSIn.Color = VSIn.Color;
 }
 )";
 
-// Pixel shader simply outputs interpolated vertex color
 static const char* PSSource = R"(
-struct PSInput 
-{ 
-    float4 Pos   : SV_POSITION; 
-    float3 Color : COLOR; 
+struct PSInput
+{
+    float4 Pos   : SV_POSITION;
+    float4 Color : COLOR0;
 };
 struct PSOutput
-{ 
-    float4 Color : SV_TARGET; 
+{
+    float4 Color : SV_TARGET;
 };
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
@@ -75,3 +92,16 @@ void main(in  PSInput  PSIn,
     PSOut.Color = float4(PSIn.Color.rgb, 1.0);
 }
 )";
+
+static Vertex QuadVerts[8] =
+{
+        {glm::vec3(-100,-100,0), glm::vec4(1,0,0,1)},
+        {glm::vec3(-100,+100,0), glm::vec4(0,1,0,1)},
+        {glm::vec3(+100,+100,0), glm::vec4(0,0,1,1)},
+        {glm::vec3(+100,-100,0), glm::vec4(1,1,0,1)}
+};
+
+static Diligent::Uint32 QuadIndices[] =
+{
+        0,1,2, 2,3,0
+};

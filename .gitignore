@@ -6,9 +6,6 @@
 # Output
 out/
 
-# CMake
-CMakeSettings.json
-
 # User-specific files
 *.rsuser
 *.suo

@@ -1,0 +1,32 @@
+﻿{
+	"configurations": [
+		{
+			"name": "x64-Debug (default)",
+			"generator": "Ninja",
+			"configurationType": "Debug",
+			"inheritEnvironments": [ "msvc_x64_x64" ],
+			"buildRoot": "${projectDir}\\out\\build\\${name}",
+			"installRoot": "${projectDir}\\out\\install\\${name}",
+			"cmakeCommandArgs": "",
+			"buildCommandArgs": "",
+			"ctestCommandArgs": "",
+			"variables": [
+				{
+					"name": "DILIGENT_NO_DIRECT3D11",
+					"value": "False",
+					"type": "BOOL"
+				},
+				{
+					"name": "DILIGENT_NO_DIRECT3D12",
+					"value": "False",
+					"type": "BOOL"
+				},
+				{
+					"name": "DILIGENT_NO_HLSL",
+					"value": "False",
+					"type": "BOOL"
+				}
+			]
+		}
+	]
+}
