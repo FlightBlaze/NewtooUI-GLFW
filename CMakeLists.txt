@@ -31,7 +31,10 @@ target_link_libraries( MyProject
         "GenericCodeGend"
         "MachineIndependentd"
         "GraphicsEngineOpenGL_64d"
-        "opengl32" )
+        "opengl32"
+        "dxgi.lib"
+        "d3d11.lib"
+        "d3dcompiler.lib" )
 
 # add_subdirectory("submodules/DiligentCore")
 # target_include_directories( MyProject PRIVATE

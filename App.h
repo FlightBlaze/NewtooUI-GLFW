@@ -10,9 +10,16 @@
 
 #include <glm/glm.hpp>
 
+// Linear interpolation
+float lerpf(float a, float b, float t);
+
 struct Vertex {
     glm::vec3 pos;
     glm::vec4 color;
+};
+
+struct CurrentTargetF {
+    float current, target;
 };
 
 class App {
@@ -38,6 +45,7 @@ private:
     GLFWwindow* mWindow;
     int mWidth, mHeight;
 
+    Diligent::RENDER_DEVICE_TYPE mDeviceType = Diligent::RENDER_DEVICE_TYPE_D3D11;
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice>  mDevice;
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> mImmediateContext;
     Diligent::RefCntAutoPtr<Diligent::ISwapChain> mSwapChain;
@@ -48,6 +56,11 @@ private:
     Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> mSRB;
     glm::mat4  mModelViewProjection;
     float mRotation;
+
+    CurrentTargetF mQuadPos = { 0, -200.0f };
+    CurrentTargetF mQuadRot = { 0, -3.14f };
+    float mQuadTime = 0.0f;
+    int mFPS = 0;
 };
 
 static const char* VSSource = R"(

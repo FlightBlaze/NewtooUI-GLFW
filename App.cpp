@@ -3,10 +3,17 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 #include "Graphics/GraphicsEngineOpenGL/interface/EngineFactoryOpenGL.h"
+#include "Graphics/GraphicsEngineD3D11/interface/EngineFactoryD3D11.h"
 #include "Graphics/GraphicsTools/interface/MapHelper.hpp"
 #include <glm/gtx/transform.hpp>
 
-App* findAppByWindow(GLFWwindow* window) {
+float lerpf(float a, float b, float t)
+{
+	return a + t * (b - a);
+}
+
+App* findAppByWindow(GLFWwindow* window)
+{
 	return static_cast<App*>(glfwGetWindowUserPointer(window));
 }
 
@@ -15,7 +22,8 @@ void App::errorCallback(int error, const char* description)
 	std::cerr << "Error: " << description << std::endl;
 }
 
-void App::resizeCallback(GLFWwindow* window, int width, int height) {
+void App::resizeCallback(GLFWwindow* window, int width, int height)
+{
 	auto* self = findAppByWindow(window);
 	self->resize(width, height);
 	self->mWidth = width;
@@ -72,6 +80,7 @@ void App::draw()
 	auto* pDSV = mSwapChain->GetDepthBufferDSV();
 	mImmediateContext->SetRenderTargets(1, &pRTV, pDSV,
 		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	
 	mImmediateContext->ClearRenderTarget(pRTV, ClearColor,
 		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	mImmediateContext->ClearDepthStencil(pDSV, Diligent::CLEAR_DEPTH_FLAG, 1.f, 0,
@@ -104,11 +113,25 @@ void App::update()
 	mDeltaTime = mCurrentTime - mPreviousTime;
 	mPreviousTime = mCurrentTime;
 
-	mRotation += mDeltaTime;
+	mQuadTime += mDeltaTime;
+
+	mFPS++;
+
+	if (mQuadTime >= 1.0f) {
+		mQuadTime = 0.0f;
+		mQuadPos.target = -mQuadPos.target;
+		mQuadRot.target = -mQuadRot.target;
+		std::cout << "FPS: " << mFPS << std::endl;
+		mFPS = 0;
+	}
+
+	mQuadPos.current = lerpf(mQuadPos.current, mQuadPos.target, mDeltaTime);
+	mQuadRot.current = lerpf(mQuadRot.current, mQuadRot.target, mDeltaTime);
+	mRotation = mQuadRot.current;
 
 	glm::mat4 view = glm::identity<glm::mat4>();
 	glm::mat4 projection = glm::ortho(0.0f, (float)mWidth, (float)mHeight, 0.0f); // glm::perspective(65.0f, (float)mWidth / (float)mHeight, 0.001f, 100.0f);
-	glm::mat4 model = glm::rotate(glm::translate(glm::vec3(mWidth / 2, mHeight / 2, 0.0f)), mRotation, glm::vec3(0, 0, 1));
+	glm::mat4 model = glm::rotate(glm::translate(glm::vec3(mWidth / 2 + mQuadPos.current, mHeight / 2, 0.0f)), mRotation, glm::vec3(0, 0, 1));
 
 	mModelViewProjection = projection * view * model;
 }
@@ -122,18 +145,47 @@ void App::initializeDiligentEngine()
 {
 	Diligent::Win32NativeWindow window{ glfwGetWin32Window(mWindow) };
 	Diligent::SwapChainDesc SCDesc;
+	switch (mDeviceType)
 	{
-		auto* pFactoryOpenGL = Diligent::GetEngineFactoryOpenGL();
+		case Diligent::RENDER_DEVICE_TYPE_GLES:
+			{
+#    if ENGINE_DLL
+				auto* GetEngineFactoryOpenGL = Diligent::LoadGraphicsEngineOpenGL();
+				auto* pFactoryOpenGL = GetEngineFactoryOpenGL();
+#		else
+				auto* pFactoryOpenGL = Diligent::GetEngineFactoryOpenGL();
+#		endif
 
-		Diligent::EngineGLCreateInfo EngineCI;
-		EngineCI.Window = window;
+				Diligent::EngineGLCreateInfo EngineCI;
+				EngineCI.Window = window;
 
-		pFactoryOpenGL->CreateDeviceAndSwapChainGL(
-			EngineCI,
-			&mDevice,
-			&mImmediateContext,
-			SCDesc,
-			&mSwapChain);
+				pFactoryOpenGL->CreateDeviceAndSwapChainGL(
+					EngineCI,
+					&mDevice,
+					&mImmediateContext,
+					SCDesc,
+					&mSwapChain);
+			}
+			break;
+		case Diligent::RENDER_DEVICE_TYPE_D3D11:
+			{
+#		if ENGINE_DLL
+				auto* GetEngineFactoryD3D11 = Diligent::LoadGraphicsEngineD3D11();
+				auto* pFactoryD3D11 = GetEngineFactoryD3D11();
+#		else
+				auto* pFactoryD3D11 = Diligent::GetEngineFactoryD3D11();
+#		endif
+
+				Diligent::EngineD3D11CreateInfo EngineCI;
+
+				pFactoryD3D11->CreateDeviceAndContextsD3D11(EngineCI, &mDevice, &mImmediateContext);
+				pFactoryD3D11->CreateSwapChainD3D11(mDevice, mImmediateContext, SCDesc, Diligent::FullScreenModeDesc{}, window, &mSwapChain);
+			}
+			break;
+		default:
+			std::cerr << "Unsupported render device type" << std::endl;
+			exit(-1);
+			break;
 	}
 }
 
