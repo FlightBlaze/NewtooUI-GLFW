@@ -10,6 +10,8 @@
 
 #include <glm/glm.hpp>
 
+#include <Spring.hh>
+
 // Linear interpolation
 float lerpf(float a, float b, float t);
 
@@ -29,6 +31,8 @@ public:
     void update();
     void resize(int width, int height);
 
+    App();
+
     static void errorCallback(int error, const char* description);
     static void resizeCallback(GLFWwindow* window, int width, int height);
 
@@ -38,12 +42,13 @@ private:
 
     float getTime();
 
-    float mPreviousTime;
-    float mCurrentTime;
-    float mDeltaTime;
+    float mPreviousTime = 0.0f;
+    float mCurrentTime = 0.0f;
+    float mDeltaTime = 0.0f;
 
-    GLFWwindow* mWindow;
-    int mWidth, mHeight;
+    GLFWwindow* mWindow = nullptr;
+    int mWidth = 0,
+        mHeight = 0;
 
     Diligent::RENDER_DEVICE_TYPE mDeviceType = Diligent::RENDER_DEVICE_TYPE_D3D11;
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice>  mDevice;
@@ -54,12 +59,13 @@ private:
     Diligent::RefCntAutoPtr<Diligent::IBuffer> mQuadVertexBuffer;
     Diligent::RefCntAutoPtr<Diligent::IBuffer> mQuadIndexBuffer;
     Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> mSRB;
-    glm::mat4  mModelViewProjection;
-    float mRotation;
+    glm::mat4  mModelViewProjection = glm::mat4(1.0f);
+    float mRotation = 0.0f;
 
-    CurrentTargetF mQuadPos = { 0, -200.0f };
-    CurrentTargetF mQuadRot = { 0, -3.14f };
+    ui::Spring mQuadPosX = ui::Spring(-100.0f, 100.0f, 1.0f, 35.0f, 5.0f);
+
     float mQuadTime = 0.0f;
+    float mSecondTime = 0.0f;
     int mFPS = 0;
 };
 
@@ -108,10 +114,10 @@ void main(in  PSInput  PSIn,
 
 static Vertex QuadVerts[8] =
 {
-        {glm::vec3(-100,-100,0), glm::vec4(1,0,0,1)},
-        {glm::vec3(-100,+100,0), glm::vec4(0,1,0,1)},
-        {glm::vec3(+100,+100,0), glm::vec4(0,0,1,1)},
-        {glm::vec3(+100,-100,0), glm::vec4(1,1,0,1)}
+        {glm::vec3(-50,-50,0), glm::vec4(1.0f,0.1f,0.1f,1)},
+        {glm::vec3(-50,+50,0), glm::vec4(0.1f,0.1f,1.0f,1)},
+        {glm::vec3(+50,+50,0), glm::vec4(0.1f,0.1f,1.0f,1)},
+        {glm::vec3(+50,-50,0), glm::vec4(1.0f,0.1f,0.1f,1)}
 };
 
 static Diligent::Uint32 QuadIndices[] =

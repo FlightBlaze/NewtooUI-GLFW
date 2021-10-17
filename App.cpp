@@ -17,6 +17,10 @@ App* findAppByWindow(GLFWwindow* window)
 	return static_cast<App*>(glfwGetWindowUserPointer(window));
 }
 
+App::App()
+{
+}
+
 void App::errorCallback(int error, const char* description)
 {
 	std::cerr << "Error: " << description << std::endl;
@@ -75,7 +79,7 @@ void App::draw()
 		*CBConstants = glm::transpose(mModelViewProjection);
 	}
 
-	const float ClearColor[] = { 0.350f,  0.350f,  0.350f, 1.0f };
+	const float ClearColor[] = { 0.75f,  0.75f,  0.75f, 1.0f };
 	auto* pRTV = mSwapChain->GetCurrentBackBufferRTV();
 	auto* pDSV = mSwapChain->GetDepthBufferDSV();
 	mImmediateContext->SetRenderTargets(1, &pRTV, pDSV,
@@ -113,25 +117,28 @@ void App::update()
 	mDeltaTime = mCurrentTime - mPreviousTime;
 	mPreviousTime = mCurrentTime;
 
-	mQuadTime += mDeltaTime;
+	mDeltaTime = fminf(mDeltaTime, 0.02);
 
+	mQuadTime += mDeltaTime;
+	mSecondTime += mDeltaTime;
 	mFPS++;
 
-	if (mQuadTime >= 1.0f) {
-		mQuadTime = 0.0f;
-		mQuadPos.target = -mQuadPos.target;
-		mQuadRot.target = -mQuadRot.target;
+	if (mSecondTime >= 1.0f) {
+		mSecondTime = 0.0f;
 		std::cout << "FPS: " << mFPS << std::endl;
 		mFPS = 0;
 	}
 
-	mQuadPos.current = lerpf(mQuadPos.current, mQuadPos.target, mDeltaTime);
-	mQuadRot.current = lerpf(mQuadRot.current, mQuadRot.target, mDeltaTime);
-	mRotation = mQuadRot.current;
+	if (mQuadTime >= 2.0f) {
+		mQuadTime = 0.0f;
+		mQuadPosX.targetValue = -mQuadPosX.targetValue;
+	}
+
+	mQuadPosX.update(mDeltaTime);
 
 	glm::mat4 view = glm::identity<glm::mat4>();
 	glm::mat4 projection = glm::ortho(0.0f, (float)mWidth, (float)mHeight, 0.0f); // glm::perspective(65.0f, (float)mWidth / (float)mHeight, 0.001f, 100.0f);
-	glm::mat4 model = glm::rotate(glm::translate(glm::vec3(mWidth / 2 + mQuadPos.current, mHeight / 2, 0.0f)), mRotation, glm::vec3(0, 0, 1));
+	glm::mat4 model = glm::rotate(glm::translate(glm::vec3(mWidth / 2 + mQuadPosX.currentValue, mHeight / 2, 0.0f)), mRotation, glm::vec3(0, 0, 1));
 
 	mModelViewProjection = projection * view * model;
 }

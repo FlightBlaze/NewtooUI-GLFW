@@ -7,3 +7,6 @@
 [submodule "submodules/glfw"]
 	path = submodules/glfw
 	url = https://github.com/glfw/glfw
+[submodule "submodules/NewtooUI"]
+	path = submodules/NewtooUI
+	url = https://github.com/FlightBlaze/NewtooUI

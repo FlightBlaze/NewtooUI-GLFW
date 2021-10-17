@@ -16,7 +16,6 @@ target_include_directories( MyProject PRIVATE
         "submodules/DiligentCore/install/include" )
 
 set(DILIGENT_LIB "submodules/DiligentCore/install/lib/Debug")
-set(DILIGENT_BIN "submodules/DiligentCore/install/bin/Debug")
 
 target_link_directories( MyProject PRIVATE ${DILIGENT_LIB} )
 
@@ -43,6 +42,14 @@ target_link_libraries( MyProject
 #         Diligent-Common
 #         Diligent-GraphicsEngineOpenGL-shared
 #         Diligent-GraphicsEngineVk-shared )
+
+# NewtooUI
+
+add_subdirectory("submodules/NewtooUI")
+target_include_directories( MyProject PRIVATE
+        "submodules/NewtooUI/include" )
+target_link_libraries( MyProject
+        NewtooUI )
 
 # glm
 
