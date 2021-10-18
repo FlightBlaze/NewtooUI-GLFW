@@ -17,7 +17,9 @@ App* findAppByWindow(GLFWwindow* window)
 	return static_cast<App*>(glfwGetWindowUserPointer(window));
 }
 
-App::App()
+App::App():
+	mQuadPhysicalProps(1.0f, 35.0f, 5.0f),
+	mQuadPosX(-100.0f, 100.0f, mQuadPhysicalProps)
 {
 }
 

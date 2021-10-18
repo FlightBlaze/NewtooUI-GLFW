@@ -60,7 +60,8 @@ private:
 
     std::shared_ptr<RenderTarget> mRenderTarget;
 
-    ui::Spring mQuadPosX = ui::Spring(-100.0f, 100.0f, 1.0f, 35.0f, 5.0f);
+    ui::SpringPhysicalProperties mQuadPhysicalProps;
+    ui::Spring mQuadPosX;
 
     float mQuadTime = 0.0f;
     float mSecondTime = 0.0f;
