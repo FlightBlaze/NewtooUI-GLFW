@@ -161,6 +161,12 @@ void App::update()
 void App::resize(int width, int height)
 {
 	mSwapChain->Resize(width, height);
+
+	RenderTargetCreateInfo renderTargetCI;
+	renderTargetCI.device = mDevice;
+	renderTargetCI.width = width;
+	renderTargetCI.height = height;
+	mRenderTarget->recreateTextures(renderTargetCI);
 }
 
 void App::initializeDiligentEngine()

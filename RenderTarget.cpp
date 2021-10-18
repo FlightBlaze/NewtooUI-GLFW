@@ -22,6 +22,8 @@ RenderTarget::RenderTarget(RenderTargetCreateInfo& createInfo)
 
 void RenderTarget::recreatePipelineState(RenderTargetCreateInfo& createInfo)
 {
+	PSO.Release();
+
 	Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
 
 	PSOCreateInfo.PSODesc.Name = "Render Target PSO";
@@ -60,6 +62,12 @@ void RenderTarget::recreatePipelineState(RenderTargetCreateInfo& createInfo)
 }
 
 void RenderTarget::recreateTextures(RenderTargetCreateInfo& createInfo) {
+	color.Release();
+	colorRTV.Release();
+	depth.Release();
+	depthDSV.Release();
+	SRB.Release();
+
 	Diligent::TextureDesc colorDesc;
 	colorDesc.Type = Diligent::RESOURCE_DIM_TEX_2D;
 	colorDesc.Width = createInfo.width;
