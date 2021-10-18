@@ -53,11 +53,23 @@ void RenderTarget::recreatePipelineState(RenderTargetCreateInfo& createInfo)
 	PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = samplers;
 	PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(samplers);
 
+	Diligent::BlendStateDesc BlendState;
+	BlendState.RenderTargets[0].BlendEnable = createInfo.alphaBlending;
+	BlendState.RenderTargets[0].SrcBlend = Diligent::BLEND_FACTOR_SRC_ALPHA;
+	BlendState.RenderTargets[0].DestBlend = Diligent::BLEND_FACTOR_INV_SRC_ALPHA;
+	PSOCreateInfo.GraphicsPipeline.BlendDesc = BlendState;
+
 	createInfo.device->CreateGraphicsPipelineState(PSOCreateInfo, &PSO);
 
 	if (createInfo.uniformBuffer != nullptr) {
 		uniformBuffer = createInfo.uniformBuffer;
 		PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants")->Set(uniformBuffer);
+	}
+
+	if (color != nullptr) {
+		PSO->CreateShaderResourceBinding(&SRB, true);
+		SRB->GetVariableByName(Diligent::SHADER_TYPE_PIXEL, "g_Texture")->
+			Set(color->GetDefaultView(Diligent::TEXTURE_VIEW_SHADER_RESOURCE));
 	}
 }
 
@@ -73,13 +85,13 @@ void RenderTarget::recreateTextures(RenderTargetCreateInfo& createInfo) {
 	colorDesc.Width = createInfo.width;
 	colorDesc.Height = createInfo.height;
 	colorDesc.MipLevels = 1;
-	colorDesc.Format = RenderTargetFormat;
+	colorDesc.Format = createInfo.swapChain->GetDesc().ColorBufferFormat;
 	colorDesc.BindFlags = Diligent::BIND_SHADER_RESOURCE | Diligent::BIND_RENDER_TARGET;
 	createInfo.device->CreateTexture(colorDesc, nullptr, &color);
 	colorRTV = color->GetDefaultView(Diligent::TEXTURE_VIEW_RENDER_TARGET);
 
 	Diligent::TextureDesc depthDesc = colorDesc;
-	depthDesc.Format = DepthBufferFormat;
+	depthDesc.Format = createInfo.swapChain->GetDesc().DepthBufferFormat;
 	depthDesc.BindFlags = Diligent::BIND_SHADER_RESOURCE | Diligent::BIND_DEPTH_STENCIL;
 	createInfo.device->CreateTexture(depthDesc, nullptr, &depth);
 	depthDSV = depth->GetDefaultView(Diligent::TEXTURE_VIEW_DEPTH_STENCIL);

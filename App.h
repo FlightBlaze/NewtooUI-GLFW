@@ -2,6 +2,7 @@
 
 #include <MyProject.h>
 #include <Diligent.h>
+#include <DualRenderTarget.h>
 #include <RenderTarget.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -16,8 +17,9 @@ struct Vertex {
     glm::vec4 color;
 };
 
-struct CurrentTargetF {
-    float current, target;
+struct MotionBlurConstants {
+    glm::vec2 direction;
+    glm::vec2 resolution;
 };
 
 class App {
@@ -58,7 +60,10 @@ private:
     glm::mat4  mModelViewProjection = glm::mat4(1.0f);
     float mRotation = 0.0f;
 
-    std::shared_ptr<RenderTarget> mRenderTarget;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> mMotionBlurConstants;
+    Diligent::RefCntAutoPtr<Diligent::IShader> mMotionBlurPS;
+    Diligent::RefCntAutoPtr<Diligent::IShader> mPrintPS;
+    DualRenderTarget mRenderTargets;
 
     ui::SpringPhysicalProperties mQuadPhysicalProps;
     ui::Spring mQuadPosX;
@@ -112,9 +117,12 @@ void main(in  PSInput  PSIn,
 )";
 
 static const char* RenderTargetPSSource = R"(
+/* Gaussian blur with 1D kernel */
+
 cbuffer Constants
 {
-    float g_Time;
+    float2 g_Direction;
+    float2 g_Resolution;
 };
 
 Texture2D    g_Texture;
@@ -140,9 +148,42 @@ void main(in  PSInput  PSIn,
     float2 UV = PSIn.UV;
 #endif
 
-    float2 DistortedUV = UV + float2(sin(UV.y*10.0)*0.1  * sin(g_Time.x*3.0),
-                                     sin(UV.x*10.0)*0.02 * sin(g_Time.x*2.0));
-    PSOut.Color = g_Texture.Sample(g_Texture_sampler, DistortedUV);
+    float2 pixelOffset = float2(1.33333, 1.33333) * g_Direction;
+    float2 normalizedOffset = pixelOffset / g_Resolution;
+
+    /* These magic numbers are calculated using http://dev.theomader.com/gaussian-kernel-calculator */
+
+    PSOut.Color = g_Texture.Sample(g_Texture_sampler, UV) * 0.29411764705882354 +
+        g_Texture.Sample(g_Texture_sampler, UV + normalizedOffset) * 0.35294117647058826 +
+        g_Texture.Sample(g_Texture_sampler, UV - normalizedOffset) * 0.35294117647058826;
+}
+)";
+
+static const char* PrintPSSource = R"(
+Texture2D    g_Texture;
+SamplerState g_Texture_sampler;
+
+struct PSInput
+{
+    float4 Pos   : SV_POSITION;
+    float2 UV    : TEX_COORD;
+};
+
+struct PSOutput
+{
+    float4 Color : SV_TARGET;
+};
+
+void main(in  PSInput  PSIn,
+          out PSOutput PSOut)
+{
+#if defined(DESKTOP_GL) || defined(GL_ES)
+    float2 UV = float2(PSIn.UV.x, 1.0 - PSIn.UV.y);
+#else
+    float2 UV = PSIn.UV;
+#endif
+
+    PSOut.Color = g_Texture.Sample(g_Texture_sampler, UV);
 }
 )";
 

@@ -18,7 +18,7 @@ App* findAppByWindow(GLFWwindow* window)
 }
 
 App::App():
-	mQuadPhysicalProps(1.0f, 35.0f, 5.0f),
+	mQuadPhysicalProps(1.0f, 95.0f, 5.0f),
 	mQuadPosX(-100.0f, 100.0f, mQuadPhysicalProps)
 {
 }
@@ -80,16 +80,34 @@ void App::draw()
 			Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
 		*CBConstants = glm::transpose(mModelViewProjection);
 	}
+	MotionBlurConstants motionBlur;
+	motionBlur.direction = glm::vec2(1.0f, 0.0f);
+	motionBlur.resolution = glm::vec2(mWidth, mHeight);
+
+	RenderTargetCreateInfo renderTargetCI;
+	renderTargetCI.device = mDevice;
+	renderTargetCI.swapChain = mSwapChain;
+	renderTargetCI.pixelShader = mMotionBlurPS;
+	renderTargetCI.uniformBuffer = mMotionBlurConstants;
+	renderTargetCI.alphaBlending = false;
+	mRenderTargets.current->recreatePipelineState(renderTargetCI);
+	mRenderTargets.previous->recreatePipelineState(renderTargetCI);
 	{
-		Diligent::MapHelper<float> CBConstants(mImmediateContext, mRenderTarget->uniformBuffer,
+		Diligent::MapHelper<MotionBlurConstants> CBConstants(mImmediateContext, mRenderTargets.current->uniformBuffer,
 			Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-		*CBConstants = getTime();
+		*CBConstants = motionBlur;
+	}
+	{
+		Diligent::MapHelper<MotionBlurConstants> CBConstants(mImmediateContext, mRenderTargets.previous->uniformBuffer,
+			Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+		*CBConstants = motionBlur;
 	}
 
 	const float ClearColor[] = { 0.75f,  0.75f,  0.75f, 1.0f };
+	const float Transparent[] = { 0.0f,  0.0f,  0.0f, 0.0f };
 
-	mRenderTarget->use(mImmediateContext);
-	mRenderTarget->clear(mImmediateContext, ClearColor);
+	mRenderTargets.current->use(mImmediateContext);
+	mRenderTargets.current->clear(mImmediateContext, Transparent);
 
 	Diligent::Uint64   offset = 0;
 	Diligent::IBuffer* pBuffs[] = { mQuadVertexBuffer };
@@ -109,19 +127,34 @@ void App::draw()
 	DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
 	mImmediateContext->DrawIndexed(DrawAttrs);
 
-	const float Black[] = { 0.0f,  0.0f,  0.0f, 1.0f };
+	int blurIterations = (int)fabsf(mQuadPosX.velocity) / 20;
+	if (blurIterations < 25)
+		blurIterations /= 4;
+	if (blurIterations > 80)
+		blurIterations = 80;
+	for (int i = 0; i < blurIterations; i++) {
+		mRenderTargets.swap();
+		mRenderTargets.current->use(mImmediateContext);
+		mRenderTargets.previous->draw(mImmediateContext);
+	}
 
 	auto* pRTV = mSwapChain->GetCurrentBackBufferRTV();
 	auto* pDSV = mSwapChain->GetDepthBufferDSV();
 
 	mImmediateContext->SetRenderTargets(1, &pRTV, pDSV,
 		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	mImmediateContext->ClearRenderTarget(pRTV, Black,
+	mImmediateContext->ClearRenderTarget(pRTV, ClearColor,
 		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	mImmediateContext->ClearDepthStencil(pDSV, Diligent::CLEAR_DEPTH_FLAG, 1.f, 0,
 		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-	mRenderTarget->draw(mImmediateContext);
+	renderTargetCI.pixelShader = mPrintPS;
+	renderTargetCI.uniformBuffer = nullptr;
+	renderTargetCI.alphaBlending = true;
+	mRenderTargets.current->recreatePipelineState(renderTargetCI);
+	mRenderTargets.previous->recreatePipelineState(renderTargetCI);
+
+	mRenderTargets.current->draw(mImmediateContext);
 
 	mSwapChain->Present();
 }
@@ -164,9 +197,11 @@ void App::resize(int width, int height)
 
 	RenderTargetCreateInfo renderTargetCI;
 	renderTargetCI.device = mDevice;
+	renderTargetCI.swapChain = mSwapChain;
 	renderTargetCI.width = width;
 	renderTargetCI.height = height;
-	mRenderTarget->recreateTextures(renderTargetCI);
+	mRenderTargets.current->recreateTextures(renderTargetCI);
+	mRenderTargets.previous->recreateTextures(renderTargetCI);
 }
 
 void App::initializeDiligentEngine()
@@ -227,8 +262,8 @@ void App::initializeResources()
 	PSOCreateInfo.PSODesc.Name = "Simple triangle PSO";
 	PSOCreateInfo.PSODesc.PipelineType = Diligent::PIPELINE_TYPE_GRAPHICS;
 	PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
-	PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = RenderTarget::RenderTargetFormat;
-	PSOCreateInfo.GraphicsPipeline.DSVFormat = RenderTarget::DepthBufferFormat;
+	PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = mSwapChain->GetDesc().ColorBufferFormat;
+	PSOCreateInfo.GraphicsPipeline.DSVFormat = mSwapChain->GetDesc().DepthBufferFormat;
 	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
 	PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
@@ -308,22 +343,26 @@ void App::initializeResources()
 	// Render target creation
 
 
-	Diligent::RefCntAutoPtr<Diligent::IShader> RTPixelShader;
-	Diligent::RefCntAutoPtr<Diligent::IBuffer> RTPSConstants;
 	{
 		ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
 		ShaderCI.EntryPoint = "main";
 		ShaderCI.Desc.Name = "Render target pixel shader";
 		ShaderCI.Source = RenderTargetPSSource;
-		mDevice->CreateShader(ShaderCI, &RTPixelShader);
+		mDevice->CreateShader(ShaderCI, &mMotionBlurPS);
+
+		ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
+		ShaderCI.EntryPoint = "main";
+		ShaderCI.Desc.Name = "Render target pixel shader";
+		ShaderCI.Source = PrintPSSource;
+		mDevice->CreateShader(ShaderCI, &mPrintPS);
 
 		Diligent::BufferDesc CBDesc;
 		CBDesc.Name = "RTPS constants CB";
-		CBDesc.Size = sizeof(float);
+		CBDesc.Size = sizeof(MotionBlurConstants);
 		CBDesc.Usage = Diligent::USAGE_DYNAMIC;
 		CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
 		CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
-		mDevice->CreateBuffer(CBDesc, nullptr, &RTPSConstants);
+		mDevice->CreateBuffer(CBDesc, nullptr, &mMotionBlurConstants);
 	}
 	
 	RenderTargetCreateInfo renderTargetCI;
@@ -331,10 +370,11 @@ void App::initializeResources()
 	renderTargetCI.swapChain = mSwapChain;
 	renderTargetCI.width = mWidth;
 	renderTargetCI.height = mHeight;
-	renderTargetCI.pixelShader = RTPixelShader;
-	renderTargetCI.uniformBuffer = RTPSConstants;
+	renderTargetCI.pixelShader = mPrintPS;
+	renderTargetCI.uniformBuffer = nullptr;
 
-	mRenderTarget = std::make_shared<RenderTarget>(renderTargetCI);
+	mRenderTargets.current = std::make_shared<RenderTarget>(renderTargetCI);
+	mRenderTargets.previous = std::make_shared<RenderTarget>(renderTargetCI);
 }
 
 float App::getTime()

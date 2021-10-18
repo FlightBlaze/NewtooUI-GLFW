@@ -9,6 +9,7 @@ struct RenderTargetCreateInfo {
     Diligent::RefCntAutoPtr<Diligent::IShader> pixelShader;
     Diligent::RefCntAutoPtr<Diligent::IBuffer> uniformBuffer;
     int width, height;
+    bool alphaBlending = false;
 };
 
 class RenderTarget {
