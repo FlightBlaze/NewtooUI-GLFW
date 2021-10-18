@@ -1,7 +1,8 @@
 ﻿// MyProject.cpp : Defines the entry point for the application.
 //
 
-#include "MyProject.h"
+#include <MyProject.h>
+#include <App.h>
 
 using namespace std;
 

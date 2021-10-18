@@ -78,17 +78,16 @@ void App::draw()
 			Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
 		*CBConstants = glm::transpose(mModelViewProjection);
 	}
+	{
+		Diligent::MapHelper<float> CBConstants(mImmediateContext, mRenderTarget->uniformBuffer,
+			Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+		*CBConstants = getTime();
+	}
 
 	const float ClearColor[] = { 0.75f,  0.75f,  0.75f, 1.0f };
-	auto* pRTV = mSwapChain->GetCurrentBackBufferRTV();
-	auto* pDSV = mSwapChain->GetDepthBufferDSV();
-	mImmediateContext->SetRenderTargets(1, &pRTV, pDSV,
-		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	
-	mImmediateContext->ClearRenderTarget(pRTV, ClearColor,
-		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	mImmediateContext->ClearDepthStencil(pDSV, Diligent::CLEAR_DEPTH_FLAG, 1.f, 0,
-		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	mRenderTarget->use(mImmediateContext);
+	mRenderTarget->clear(mImmediateContext, ClearColor);
 
 	Diligent::Uint64   offset = 0;
 	Diligent::IBuffer* pBuffs[] = { mQuadVertexBuffer };
@@ -108,6 +107,20 @@ void App::draw()
 	DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
 	mImmediateContext->DrawIndexed(DrawAttrs);
 
+	const float Black[] = { 0.0f,  0.0f,  0.0f, 1.0f };
+
+	auto* pRTV = mSwapChain->GetCurrentBackBufferRTV();
+	auto* pDSV = mSwapChain->GetDepthBufferDSV();
+
+	mImmediateContext->SetRenderTargets(1, &pRTV, pDSV,
+		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	mImmediateContext->ClearRenderTarget(pRTV, Black,
+		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	mImmediateContext->ClearDepthStencil(pDSV, Diligent::CLEAR_DEPTH_FLAG, 1.f, 0,
+		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	mRenderTarget->draw(mImmediateContext);
+
 	mSwapChain->Present();
 }
 
@@ -117,7 +130,7 @@ void App::update()
 	mDeltaTime = mCurrentTime - mPreviousTime;
 	mPreviousTime = mCurrentTime;
 
-	mDeltaTime = fminf(mDeltaTime, 0.02);
+	mDeltaTime = fminf(mDeltaTime, 0.02f);
 
 	mQuadTime += mDeltaTime;
 	mSecondTime += mDeltaTime;
@@ -166,6 +179,8 @@ void App::initializeDiligentEngine()
 				Diligent::EngineGLCreateInfo EngineCI;
 				EngineCI.Window = window;
 
+				ModifyEngineInitInfo({mDeviceType, pFactoryOpenGL, EngineCI, SCDesc});
+
 				pFactoryOpenGL->CreateDeviceAndSwapChainGL(
 					EngineCI,
 					&mDevice,
@@ -185,6 +200,8 @@ void App::initializeDiligentEngine()
 
 				Diligent::EngineD3D11CreateInfo EngineCI;
 
+				ModifyEngineInitInfo({ mDeviceType, pFactoryD3D11, EngineCI, SCDesc });
+
 				pFactoryD3D11->CreateDeviceAndContextsD3D11(EngineCI, &mDevice, &mImmediateContext);
 				pFactoryD3D11->CreateSwapChainD3D11(mDevice, mImmediateContext, SCDesc, Diligent::FullScreenModeDesc{}, window, &mSwapChain);
 			}
@@ -202,8 +219,8 @@ void App::initializeResources()
 	PSOCreateInfo.PSODesc.Name = "Simple triangle PSO";
 	PSOCreateInfo.PSODesc.PipelineType = Diligent::PIPELINE_TYPE_GRAPHICS;
 	PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
-	PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = mSwapChain->GetDesc().ColorBufferFormat;
-	PSOCreateInfo.GraphicsPipeline.DSVFormat = mSwapChain->GetDesc().DepthBufferFormat;
+	PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = RenderTarget::RenderTargetFormat;
+	PSOCreateInfo.GraphicsPipeline.DSVFormat = RenderTarget::DepthBufferFormat;
 	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
 	PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
@@ -278,6 +295,38 @@ void App::initializeResources()
 
 	mPSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->Set(mVSConstants);
 	mPSO->CreateShaderResourceBinding(&mSRB, true);
+
+	
+	// Render target creation
+
+
+	Diligent::RefCntAutoPtr<Diligent::IShader> RTPixelShader;
+	Diligent::RefCntAutoPtr<Diligent::IBuffer> RTPSConstants;
+	{
+		ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
+		ShaderCI.EntryPoint = "main";
+		ShaderCI.Desc.Name = "Render target pixel shader";
+		ShaderCI.Source = RenderTargetPSSource;
+		mDevice->CreateShader(ShaderCI, &RTPixelShader);
+
+		Diligent::BufferDesc CBDesc;
+		CBDesc.Name = "RTPS constants CB";
+		CBDesc.Size = sizeof(float);
+		CBDesc.Usage = Diligent::USAGE_DYNAMIC;
+		CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
+		CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
+		mDevice->CreateBuffer(CBDesc, nullptr, &RTPSConstants);
+	}
+	
+	RenderTargetCreateInfo renderTargetCI;
+	renderTargetCI.device = mDevice;
+	renderTargetCI.swapChain = mSwapChain;
+	renderTargetCI.width = mWidth;
+	renderTargetCI.height = mHeight;
+	renderTargetCI.pixelShader = RTPixelShader;
+	renderTargetCI.uniformBuffer = RTPSConstants;
+
+	mRenderTarget = std::make_shared<RenderTarget>(renderTargetCI);
 }
 
 float App::getTime()

@@ -1,0 +1,17 @@
+#pragma once
+
+#define PLATFORM_WIN32 1
+#include "Graphics/GraphicsEngine/interface/RenderDevice.h"
+#include "Graphics/GraphicsEngine/interface/DeviceContext.h"
+#include "Graphics/GraphicsEngine/interface/SwapChain.h"
+#include "Common/interface/RefCntAutoPtr.hpp"
+
+struct ModifyEngineInitInfoAttribs
+{
+    const Diligent::RENDER_DEVICE_TYPE DeviceType;
+    const Diligent::IEngineFactory* Factory;
+    Diligent::EngineCreateInfo& EngineCI;
+    Diligent::SwapChainDesc& SCDesc;
+};
+
+void ModifyEngineInitInfo(const ModifyEngineInitInfoAttribs& Attribs);

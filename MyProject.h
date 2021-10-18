@@ -5,6 +5,4 @@
 
 #include <iostream>
 
-#include <App.h>
-
 // TODO: Reference additional headers your program requires here.

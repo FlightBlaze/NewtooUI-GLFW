@@ -1,16 +1,12 @@
 #pragma once
 
+#include <MyProject.h>
+#include <Diligent.h>
+#include <RenderTarget.h>
 #include <GLFW/glfw3.h>
-
-#define PLATFORM_WIN32 1
-#include "Graphics/GraphicsEngine/interface/RenderDevice.h"
-#include "Graphics/GraphicsEngine/interface/DeviceContext.h"
-#include "Graphics/GraphicsEngine/interface/SwapChain.h"
-#include "Common/interface/RefCntAutoPtr.hpp"
-
 #include <glm/glm.hpp>
-
 #include <Spring.hh>
+#include <memory>
 
 // Linear interpolation
 float lerpf(float a, float b, float t);
@@ -62,6 +58,8 @@ private:
     glm::mat4  mModelViewProjection = glm::mat4(1.0f);
     float mRotation = 0.0f;
 
+    std::shared_ptr<RenderTarget> mRenderTarget;
+
     ui::Spring mQuadPosX = ui::Spring(-100.0f, 100.0f, 1.0f, 35.0f, 5.0f);
 
     float mQuadTime = 0.0f;
@@ -109,6 +107,41 @@ void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
     PSOut.Color = float4(PSIn.Color.rgb, 1.0);
+}
+)";
+
+static const char* RenderTargetPSSource = R"(
+cbuffer Constants
+{
+    float g_Time;
+};
+
+Texture2D    g_Texture;
+SamplerState g_Texture_sampler;
+
+struct PSInput
+{
+    float4 Pos   : SV_POSITION;
+    float2 UV    : TEX_COORD;
+};
+
+struct PSOutput
+{
+    float4 Color : SV_TARGET;
+};
+
+void main(in  PSInput  PSIn,
+          out PSOutput PSOut)
+{
+#if defined(DESKTOP_GL) || defined(GL_ES)
+    float2 UV = float2(PSIn.UV.x, 1.0 - PSIn.UV.y);
+#else
+    float2 UV = PSIn.UV;
+#endif
+
+    float2 DistortedUV = UV + float2(sin(UV.y*10.0)*0.1  * sin(g_Time.x*3.0),
+                                     sin(UV.x*10.0)*0.02 * sin(g_Time.x*2.0));
+    PSOut.Color = g_Texture.Sample(g_Texture_sampler, DistortedUV);
 }
 )";
 
