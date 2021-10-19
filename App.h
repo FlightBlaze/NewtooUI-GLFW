@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include <Spring.hh>
 #include <memory>
+#include <vector>
 
 // Linear interpolation
 float lerpf(float a, float b, float t);
@@ -54,6 +55,7 @@ private:
     Diligent::RefCntAutoPtr<Diligent::ISwapChain> mSwapChain;
     Diligent::RefCntAutoPtr<Diligent::IPipelineState> mPSO;
     Diligent::RefCntAutoPtr<Diligent::IBuffer> mVSConstants;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> mPSConstants;
     Diligent::RefCntAutoPtr<Diligent::IBuffer> mQuadVertexBuffer;
     Diligent::RefCntAutoPtr<Diligent::IBuffer> mQuadIndexBuffer;
     Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> mSRB;
@@ -100,6 +102,11 @@ void main(in  VSInput VSIn,
 )";
 
 static const char* PSSource = R"(
+cbuffer Constants
+{
+    float g_Opacity;
+};
+
 struct PSInput
 {
     float4 Pos   : SV_POSITION;
@@ -112,7 +119,7 @@ struct PSOutput
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
-    PSOut.Color = float4(PSIn.Color.rgb, 1.0);
+    PSOut.Color = float4(PSIn.Color.rgb, g_Opacity);
 }
 )";
 
@@ -198,4 +205,81 @@ static Vertex QuadVerts[8] =
 static Diligent::Uint32 QuadIndices[] =
 {
         0,1,2, 2,3,0
+};
+
+static std::vector<float> GaussianKernel31x1 =
+{
+    0.1479298670997733f,
+    0.15396059101965992f,
+    0.15981088575094535f,
+    0.16544217619865625f,
+    0.17081625499596645f,
+    0.17589570887009753f,
+    0.18064434869980706f,
+    0.18502763641967188f,
+    0.18901310177328587f,
+    0.1925707419106246f,
+    0.19567339696848868f,
+    0.1982970950675025f,
+    0.20042136060094926f,
+    0.2020294802720795f,
+    0.20310872204587352f,
+    0.20365050300338722f,
+    0.20365050300338722f,
+    0.20310872204587355f,
+    0.2020294802720795f,
+    0.20042136060094928f,
+    0.19829709506750254f,
+    0.1956733969684887f,
+    0.19257074191062462f,
+    0.18901310177328592f,
+    0.18502763641967193f,
+    0.18064434869980714f,
+    0.1758957088700976f,
+    0.17081625499596653f,
+    0.16544217619865634f,
+    0.1598108857509454f,
+    0.15396059101966f,
+    0.14792986709977338f
+};
+
+static std::vector<float> GaussianKernel15x1 =
+{
+    0.19306470526010783f,
+    0.22045166276214131f,
+    0.24663841379876808f,
+    0.27036153640026195f,
+    0.2903794913659932f,
+    0.30557922275140015f,
+    0.31507834163275994f,
+    0.3183098861837907f,
+    0.31507834163276f,
+    0.3055792227514002f,
+    0.2903794913659933f,
+    0.270361536400262f,
+    0.24663841379876816f,
+    0.22045166276214143f,
+    0.1930647052601079f
+};
+
+static std::vector<float> GaussianKernel9x1 =
+{
+    0.23264196693351172f,
+    0.3305198208945779f,
+    0.43011005402760094f,
+    0.5126657667016575f,
+    0.5597082137916062f,
+    0.5126657667016575f,
+    0.43011005402760094f,
+    0.33051982089457793f,
+    0.23264196693351175f
+};
+
+static std::vector<float> GaussianKernel5x1 =
+{
+    0.17231423441478907f,
+    0.6197522207772878f,
+    1.1753482366109071f,
+    0.6197522207772876f,
+    0.17231423441478907f
 };

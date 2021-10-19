@@ -74,13 +74,7 @@ int App::run()
 
 void App::draw()
 {
-	// Write model view projection matrix to uniform
-	{
-		Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
-			Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-		*CBConstants = glm::transpose(mModelViewProjection);
-	}
-	MotionBlurConstants motionBlur;
+	/*MotionBlurConstants motionBlur;
 	motionBlur.direction = glm::vec2(1.0f, 0.0f);
 	motionBlur.resolution = glm::vec2(mWidth, mHeight);
 
@@ -101,13 +95,23 @@ void App::draw()
 		Diligent::MapHelper<MotionBlurConstants> CBConstants(mImmediateContext, mRenderTargets.previous->uniformBuffer,
 			Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
 		*CBConstants = motionBlur;
-	}
+	}*/
 
 	const float ClearColor[] = { 0.75f,  0.75f,  0.75f, 1.0f };
 	const float Transparent[] = { 0.0f,  0.0f,  0.0f, 0.0f };
 
-	mRenderTargets.current->use(mImmediateContext);
-	mRenderTargets.current->clear(mImmediateContext, Transparent);
+	// mRenderTargets.current->use(mImmediateContext);
+	// mRenderTargets.current->clear(mImmediateContext, Transparent);
+
+	auto* pRTV = mSwapChain->GetCurrentBackBufferRTV();
+	auto* pDSV = mSwapChain->GetDepthBufferDSV();
+
+	mImmediateContext->SetRenderTargets(1, &pRTV, pDSV,
+		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	mImmediateContext->ClearRenderTarget(pRTV, ClearColor,
+		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	mImmediateContext->ClearDepthStencil(pDSV, Diligent::CLEAR_DEPTH_FLAG, 1.f, 0,
+		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
 	Diligent::Uint64   offset = 0;
 	Diligent::IBuffer* pBuffs[] = { mQuadVertexBuffer };
@@ -125,9 +129,55 @@ void App::draw()
 	DrawAttrs.IndexType = Diligent::VT_UINT32;
 	DrawAttrs.NumIndices = _countof(QuadIndices);
 	DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
-	mImmediateContext->DrawIndexed(DrawAttrs);
 
-	int blurIterations = (int)fabsf(mQuadPosX.velocity) / 20;
+	float speed = fabsf(mQuadPosX.velocity);
+	std::vector<float>* kernel = nullptr;
+	if (speed > 110)
+		kernel = &GaussianKernel5x1;
+	if (speed > 190)
+		kernel = &GaussianKernel9x1;
+	if (speed > 250)
+		kernel = &GaussianKernel15x1;
+	if (speed > 380)
+		kernel = &GaussianKernel31x1;
+	if (kernel != nullptr) {
+		glm::vec2 blurDirection = glm::vec2(1.0f, 0.0f);
+		int kernelSize = (int)kernel->size();
+		int kernelCenter = kernelSize / 2;
+		for (int i = 0; i < kernelSize; i++) {
+			float offset = (float)(i - kernelCenter);
+			float stepPx = 1.0f;
+			glm::vec3 offsetInDirection = glm::vec3(glm::vec2(blurDirection * offset * stepPx), 0.0f);
+			glm::mat4 MVP = mModelViewProjection * glm::translate(offsetInDirection);
+			// Write model view projection matrix to uniform
+			{
+				Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
+					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+				*CBConstants = glm::transpose(MVP);
+			}
+			{
+				Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
+					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+				*CBConstants = kernel->at(i);
+			}
+			mImmediateContext->DrawIndexed(DrawAttrs);
+		}
+	}
+	else {
+		{
+			Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
+				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+			*CBConstants = glm::transpose(mModelViewProjection);
+		}
+		{
+			Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
+				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+			*CBConstants = 1.0f; // opacity
+		}
+		mImmediateContext->DrawIndexed(DrawAttrs);
+	}
+
+	/*int blurIterations = (int)fabsf(mQuadPosX.velocity) / 20;
 	if (blurIterations < 25)
 		blurIterations /= 4;
 	if (blurIterations > 80)
@@ -136,25 +186,15 @@ void App::draw()
 		mRenderTargets.swap();
 		mRenderTargets.current->use(mImmediateContext);
 		mRenderTargets.previous->draw(mImmediateContext);
-	}
+	}*/
 
-	auto* pRTV = mSwapChain->GetCurrentBackBufferRTV();
-	auto* pDSV = mSwapChain->GetDepthBufferDSV();
-
-	mImmediateContext->SetRenderTargets(1, &pRTV, pDSV,
-		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	mImmediateContext->ClearRenderTarget(pRTV, ClearColor,
-		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	mImmediateContext->ClearDepthStencil(pDSV, Diligent::CLEAR_DEPTH_FLAG, 1.f, 0,
-		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-	renderTargetCI.pixelShader = mPrintPS;
+	/*renderTargetCI.pixelShader = mPrintPS;
 	renderTargetCI.uniformBuffer = nullptr;
 	renderTargetCI.alphaBlending = true;
 	mRenderTargets.current->recreatePipelineState(renderTargetCI);
-	mRenderTargets.previous->recreatePipelineState(renderTargetCI);
+	mRenderTargets.previous->recreatePipelineState(renderTargetCI);*/
 
-	mRenderTargets.current->draw(mImmediateContext);
+	// mRenderTargets.current->draw(mImmediateContext);
 
 	mSwapChain->Present();
 }
@@ -268,6 +308,14 @@ void App::initializeResources()
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
 	PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
 
+	Diligent::BlendStateDesc BlendState;
+	BlendState.RenderTargets[0].BlendEnable = Diligent::True;
+	BlendState.RenderTargets[0].SrcBlend = Diligent::BLEND_FACTOR_SRC_ALPHA;
+	BlendState.RenderTargets[0].DestBlend = Diligent::BLEND_FACTOR_INV_SRC_ALPHA;
+	// BlendState.RenderTargets[0].SrcBlendAlpha = Diligent::BLEND_FACTOR_ONE;
+	// BlendState.RenderTargets[0].DestBlendAlpha = Diligent::BLEND_FACTOR_INV_SRC_ALPHA;
+	PSOCreateInfo.GraphicsPipeline.BlendDesc = BlendState;
+
 	Diligent::ShaderCreateInfo ShaderCI;
 	ShaderCI.SourceLanguage = Diligent::SHADER_SOURCE_LANGUAGE_HLSL;
 	ShaderCI.UseCombinedTextureSamplers = Diligent::True;
@@ -298,6 +346,14 @@ void App::initializeResources()
 		ShaderCI.Desc.Name = "Triangle pixel shader";
 		ShaderCI.Source = PSSource;
 		mDevice->CreateShader(ShaderCI, &pPS);
+
+		Diligent::BufferDesc CBDesc;
+		CBDesc.Name = "PS constants CB";
+		CBDesc.Size = sizeof(float);
+		CBDesc.Usage = Diligent::USAGE_DYNAMIC;
+		CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
+		CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
+		mDevice->CreateBuffer(CBDesc, nullptr, &mPSConstants);
 	}
 
 	PSOCreateInfo.pVS = pVS;
@@ -337,6 +393,7 @@ void App::initializeResources()
 	mDevice->CreateGraphicsPipelineState(PSOCreateInfo, &mPSO);
 
 	mPSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->Set(mVSConstants);
+	mPSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants")->Set(mPSConstants);
 	mPSO->CreateShaderResourceBinding(&mSRB, true);
 
 	
@@ -372,6 +429,7 @@ void App::initializeResources()
 	renderTargetCI.height = mHeight;
 	renderTargetCI.pixelShader = mPrintPS;
 	renderTargetCI.uniformBuffer = nullptr;
+	renderTargetCI.alphaBlending = true;
 
 	mRenderTargets.current = std::make_shared<RenderTarget>(renderTargetCI);
 	mRenderTargets.previous = std::make_shared<RenderTarget>(renderTargetCI);
