@@ -7,6 +7,7 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <Spring.hh>
+#include <Font.hh>
 #include <memory>
 #include <vector>
 
@@ -69,6 +70,7 @@ private:
 
     ui::SpringPhysicalProperties mQuadPhysicalProps;
     ui::Spring mQuadPosX;
+    std::shared_ptr<ui::Font> mFont;
 
     float mQuadTime = 0.0f;
     float mSecondTime = 0.0f;

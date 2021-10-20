@@ -1,4 +1,5 @@
 #include <App.h>
+#include <Resource.h>
 #include <iostream>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
@@ -433,6 +434,8 @@ void App::initializeResources()
 
 	mRenderTargets.current = std::make_shared<RenderTarget>(renderTargetCI);
 	mRenderTargets.previous = std::make_shared<RenderTarget>(renderTargetCI);
+
+	mFont = ui::LoadFont(LoadTextResource("Roboto-Regular.fnt"));
 }
 
 float App::getTime()

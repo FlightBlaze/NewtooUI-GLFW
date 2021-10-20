@@ -10,3 +10,6 @@
 [submodule "submodules/NewtooUI"]
 	path = submodules/NewtooUI
 	url = https://github.com/FlightBlaze/NewtooUI
+[submodule "submodules/tinyxml2"]
+	path = submodules/tinyxml2
+	url = https://github.com/leethomason/tinyxml2
