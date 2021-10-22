@@ -25,19 +25,18 @@ struct MotionBlurConstants {
     glm::vec2 resolution;
 };
 
-class TextBox {
+class TextRenderer {
 public:
-    std::string text;
-    std::shared_ptr<ui::Font> font;
+    const std::shared_ptr<ui::Font> font;
 
-    TextBox(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+    TextRenderer(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
         Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain,
-        std::shared_ptr<ui::Font> font,
-        std::string text);
+        std::shared_ptr<ui::Font> font);
 
     void draw(
         Diligent::RefCntAutoPtr<Diligent::IDeviceContext> context,
         glm::mat4 modelViewProjection,
+        const std::string& text,
         float sizePx = 32.0f,
         float opacity = 1.0f);
 
@@ -46,7 +45,7 @@ protected:
     Diligent::RefCntAutoPtr<Diligent::IBuffer> mVSConstants;
     Diligent::RefCntAutoPtr<Diligent::IBuffer> mPSConstants;
     Diligent::RefCntAutoPtr<Diligent::IBuffer> mQuadIndexBuffer;
-    Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> mSRB;
+    std::vector<Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding>> mPageSRBs;
 };
 
 class App {
@@ -99,7 +98,7 @@ private:
     ui::SpringPhysicalProperties mQuadPhysicalProps;
     ui::Spring mQuadPosX;
     std::shared_ptr<ui::Font> mFont;
-    std::shared_ptr<TextBox> mTextBox;
+    std::shared_ptr<TextRenderer> mTextRenderer;
 
     float mQuadTime = 0.0f;
     float mSecondTime = 0.0f;

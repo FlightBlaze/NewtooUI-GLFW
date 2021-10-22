@@ -200,7 +200,7 @@ void App::draw()
 
 	// mRenderTargets.current->draw(mImmediateContext);
 
-	mTextBox->draw(mImmediateContext, mTextModelViewProjection, mTextSize, 1.0f);
+	mTextRenderer->draw(mImmediateContext, mTextModelViewProjection, "Hello world!", mTextSize, 1.0f);
 
 	mSwapChain->Present();
 }
@@ -462,7 +462,7 @@ void App::initializeFont() {
 	stbi_image_free(data);
 
 	mFont = ui::LoadFont(mDevice, LoadTextResource("Roboto-Regular.fnt"), atlases);
-	mTextBox = std::make_shared<TextBox>(TextBox(mDevice, mSwapChain, mFont, "Hello world!"));
+	mTextRenderer = std::make_shared<TextRenderer>(TextRenderer(mDevice, mSwapChain, mFont));
 }
 
 float App::getTime()
@@ -470,13 +470,11 @@ float App::getTime()
 	return (float)glfwGetTime();
 }
 
-TextBox::TextBox(
+TextRenderer::TextRenderer(
 	Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
 	Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain,
-	std::shared_ptr<ui::Font> font,
-	std::string text):
-		font(font),
-		text(text)
+	std::shared_ptr<ui::Font> font):
+		font(font)
 {
 	Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
 	PSOCreateInfo.PSODesc.Name = "Text PSO";
@@ -566,10 +564,13 @@ TextBox::TextBox(
 
 	mPSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->Set(mVSConstants);
 	mPSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants")->Set(mPSConstants);
-	mPSO->CreateShaderResourceBinding(&mSRB, true);
 
-	mSRB->GetVariableByName(Diligent::SHADER_TYPE_PIXEL, "g_Texture")->
-		Set(font->atlases[0]->textureSRV);
+	mPageSRBs.resize(font->pages.size());
+	for (int i = 0; i < mPageSRBs.size(); i++) {
+		mPSO->CreateShaderResourceBinding(&mPageSRBs[i], true);
+		mPageSRBs[i]->GetVariableByName(Diligent::SHADER_TYPE_PIXEL, "g_Texture")->
+			Set(font->pages[i].atlas->textureSRV);
+	}
 	
 	Diligent::BufferDesc IndBuffDesc;
 	IndBuffDesc.Name = "Gliph quad index buffer";
@@ -582,9 +583,10 @@ TextBox::TextBox(
 	renderDevice->CreateBuffer(IndBuffDesc, &IBData, &mQuadIndexBuffer);
 }
 
-void TextBox::draw(
+void TextRenderer::draw(
 	Diligent::RefCntAutoPtr<Diligent::IDeviceContext> context,
 	glm::mat4 modelViewProjection,
+	const std::string& text,
 	float sizePx,
 	float opacity)
 {
@@ -640,7 +642,8 @@ void TextBox::draw(
 
 		context->SetPipelineState(mPSO);
 
-		context->CommitShaderResources(mSRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		auto SRB = mPageSRBs[character.page];
+		context->CommitShaderResources(SRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
 		Diligent::DrawIndexedAttribs DrawAttrs;
 		DrawAttrs.IndexType = Diligent::VT_UINT32;
