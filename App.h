@@ -378,7 +378,7 @@ void main(in  PSInput  PSIn,
     float2 dxdy = fwidth(PSIn.UV) * g_AtlasSize;
     float4 MSD = g_Texture.Sample(g_Texture_sampler, UV);
     float SDF = median(MSD.r, MSD.g, MSD.b);
-    float Opacity = clamp(SDF * g_DistanceRange / length(dxdy), 0.0, 1.0);
+    float Opacity = clamp(SDF * g_DistanceRange/* / length(dxdy)*/, 0.0, 1.0);
     if(Opacity < 0.5)
         discard;
     PSOut.Color = float4(g_Color, g_Opacity * Opacity);

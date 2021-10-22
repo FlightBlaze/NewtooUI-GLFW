@@ -238,7 +238,7 @@ void App::update()
 
 	glm::mat4 textModel = glm::translate(glm::vec3(100.0f, 100.0f, 0.0f));
 	mTextModelViewProjection = projection * view * textModel;
-	mTextSize = sinf(getTime()) * 24.0f + 24.0f + 16.0f;
+	mTextSize = sinf(getTime()) * 32.0f + 32.0f + 10.0f;
 }
 
 void App::resize(int width, int height)
@@ -588,8 +588,12 @@ void TextBox::draw(
 	float sizePx,
 	float opacity)
 {
-	float scale = sizePx / (float)font->lineHeight;
-	glm::vec2 pos = glm::vec2(0.0f, -font->baseline) * scale;
+	static const float smallSizePx = 32.0f;
+	static const float maxExtraDist = 0.0f; // 5.0f
+	float extraDistance = fmaxf((smallSizePx - sizePx) / sizePx * maxExtraDist, 0);
+
+	float scale = sizePx / (float)font->lineHeight; 
+	glm::vec2 pos = glm::vec2(0.0f, (float)font->baseline * scale);
 	for (int i = 0; i < text.size(); i++)
 	{
 		int symbol = text[i];
@@ -621,7 +625,7 @@ void TextBox::draw(
 			GlyphPSConstants constants;
 			constants.color = glm::vec3(0.0f);
 			constants.opacity = opacity;
-			constants.distanceRange = (float)font->distanceRange;
+			constants.distanceRange = (float)font->distanceRange + extraDistance;
 			constants.atlasSize = glm::vec2(font->atlasWidth, font->atlasHeight);
 			*CBConstants = constants;
 		}
