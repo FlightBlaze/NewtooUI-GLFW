@@ -10,6 +10,7 @@
 #include <Font.hh>
 #include <memory>
 #include <vector>
+#include <string>
 
 // Linear interpolation
 float lerpf(float a, float b, float t);
@@ -22,6 +23,30 @@ struct Vertex {
 struct MotionBlurConstants {
     glm::vec2 direction;
     glm::vec2 resolution;
+};
+
+class TextBox {
+public:
+    std::string text;
+    std::shared_ptr<ui::Font> font;
+
+    TextBox(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+        Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain,
+        std::shared_ptr<ui::Font> font,
+        std::string text);
+
+    void draw(
+        Diligent::RefCntAutoPtr<Diligent::IDeviceContext> context,
+        glm::mat4 modelViewProjection,
+        float sizePx = 32.0f,
+        float opacity = 1.0f);
+
+protected:
+    Diligent::RefCntAutoPtr<Diligent::IPipelineState> mPSO;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> mVSConstants;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> mPSConstants;
+    Diligent::RefCntAutoPtr<Diligent::IBuffer> mQuadIndexBuffer;
+    Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> mSRB;
 };
 
 class App {
@@ -39,6 +64,7 @@ public:
 private:
     void initializeDiligentEngine();
     void initializeResources();
+    void initializeFont();
 
     float getTime();
 
@@ -61,7 +87,9 @@ private:
     Diligent::RefCntAutoPtr<Diligent::IBuffer> mQuadIndexBuffer;
     Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> mSRB;
     glm::mat4  mModelViewProjection = glm::mat4(1.0f);
+    glm::mat4  mTextModelViewProjection = glm::mat4(1.0f);
     float mRotation = 0.0f;
+    float mTextSize = 16.0f;
 
     Diligent::RefCntAutoPtr<Diligent::IBuffer> mMotionBlurConstants;
     Diligent::RefCntAutoPtr<Diligent::IShader> mMotionBlurPS;
@@ -71,6 +99,7 @@ private:
     ui::SpringPhysicalProperties mQuadPhysicalProps;
     ui::Spring mQuadPosX;
     std::shared_ptr<ui::Font> mFont;
+    std::shared_ptr<TextBox> mTextBox;
 
     float mQuadTime = 0.0f;
     float mSecondTime = 0.0f;
@@ -284,4 +313,81 @@ static std::vector<float> GaussianKernel5x1 =
     1.1753482366109071f,
     0.6197522207772876f,
     0.17231423441478907f
+};
+
+static const char* GlyphVSSource = R"(
+cbuffer Constants
+{
+    float4x4 g_ModelViewProj;
+};
+
+struct VSInput
+{
+    float2 Pos   : ATTRIB0;
+    float2 TexCoord : ATTRIB1;
+};
+
+struct PSInput
+{
+    float4 Pos   : SV_POSITION;
+    float2 UV    : TEX_COORD;
+};
+
+void main(in  VSInput VSIn,
+          out PSInput PSIn)
+{
+    PSIn.Pos = mul(float4(VSIn.Pos, 0.0, 1.0), g_ModelViewProj);
+    PSIn.UV = VSIn.TexCoord;
+}
+)";
+
+static const char* GlyphPSSource = R"(
+cbuffer Constants
+{
+    float3 g_Color;
+    float g_Opacity;
+    float g_DistanceRange;
+    float2 g_AtlasSize;
+};
+
+Texture2D    g_Texture;
+SamplerState g_Texture_sampler;
+
+struct PSInput
+{
+    float4 Pos   : SV_POSITION;
+    float2 UV    : TEX_COORD;
+};
+struct PSOutput
+{
+    float4 Color : SV_TARGET;
+};
+
+float median(float r, float g, float b) {
+    return max(min(r, g), min(max(r, g), b));
+}
+
+void main(in  PSInput  PSIn,
+          out PSOutput PSOut)
+{
+#if defined(DESKTOP_GL) || defined(GL_ES)
+    float2 UV = float2(PSIn.UV.x, 1.0 - PSIn.UV.y);
+#else
+    float2 UV = PSIn.UV;
+#endif
+    float2 dxdy = fwidth(PSIn.UV) * g_AtlasSize;
+    float4 MSD = g_Texture.Sample(g_Texture_sampler, UV);
+    float SDF = median(MSD.r, MSD.g, MSD.b);
+    float Opacity = clamp(SDF * g_DistanceRange / length(dxdy), 0.0, 1.0);
+    if(Opacity < 0.5)
+        discard;
+    PSOut.Color = float4(g_Color, g_Opacity * Opacity);
+}
+)";
+
+struct GlyphPSConstants {
+    glm::vec3 color;
+    float opacity;
+    float distanceRange;
+    glm::vec2 atlasSize;
 };

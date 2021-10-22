@@ -1,12 +1,15 @@
-#include <App.h>
+﻿#include <App.h>
 #include <Resource.h>
 #include <iostream>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 #include "Graphics/GraphicsEngineOpenGL/interface/EngineFactoryOpenGL.h"
 #include "Graphics/GraphicsEngineD3D11/interface/EngineFactoryD3D11.h"
+#include "Graphics/GraphicsTools/interface/CommonlyUsedStates.h"
 #include "Graphics/GraphicsTools/interface/MapHelper.hpp"
 #include <glm/gtx/transform.hpp>
+#include <glm/gtx/matrix_transform_2d.hpp>
+#include <stb_image.h>
 
 float lerpf(float a, float b, float t)
 {
@@ -197,6 +200,8 @@ void App::draw()
 
 	// mRenderTargets.current->draw(mImmediateContext);
 
+	mTextBox->draw(mImmediateContext, mTextModelViewProjection, mTextSize, 1.0f);
+
 	mSwapChain->Present();
 }
 
@@ -230,6 +235,10 @@ void App::update()
 	glm::mat4 model = glm::rotate(glm::translate(glm::vec3(mWidth / 2 + mQuadPosX.currentValue, mHeight / 2, 0.0f)), mRotation, glm::vec3(0, 0, 1));
 
 	mModelViewProjection = projection * view * model;
+
+	glm::mat4 textModel = glm::translate(glm::vec3(100.0f, 100.0f, 0.0f));
+	mTextModelViewProjection = projection * view * textModel;
+	mTextSize = sinf(getTime()) * 24.0f + 24.0f + 16.0f;
 }
 
 void App::resize(int width, int height)
@@ -372,7 +381,7 @@ void App::initializeResources()
 	PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = Diligent::SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
 
 	Diligent::BufferDesc VertBuffDesc;
-	VertBuffDesc.Name = "Cube vertex buffer";
+	VertBuffDesc.Name = "Quad vertex buffer";
 	VertBuffDesc.Usage = Diligent::USAGE_IMMUTABLE;
 	VertBuffDesc.BindFlags = Diligent::BIND_VERTEX_BUFFER;
 	VertBuffDesc.Size = sizeof(QuadVerts);
@@ -382,7 +391,7 @@ void App::initializeResources()
 	mDevice->CreateBuffer(VertBuffDesc, &VBData, &mQuadVertexBuffer);
 
 	Diligent::BufferDesc IndBuffDesc;
-	IndBuffDesc.Name = "Cube index buffer";
+	IndBuffDesc.Name = "Quad index buffer";
 	IndBuffDesc.Usage = Diligent::USAGE_IMMUTABLE;
 	IndBuffDesc.BindFlags = Diligent::BIND_INDEX_BUFFER;
 	IndBuffDesc.Size = sizeof(QuadIndices);
@@ -435,10 +444,207 @@ void App::initializeResources()
 	mRenderTargets.current = std::make_shared<RenderTarget>(renderTargetCI);
 	mRenderTargets.previous = std::make_shared<RenderTarget>(renderTargetCI);
 
-	mFont = ui::LoadFont(LoadTextResource("Roboto-Regular.fnt"));
+	initializeFont();
+}
+
+void App::initializeFont() {
+	std::vector<std::shared_ptr<ui::FontAtlas>> atlases;
+
+	int width, height, numChannels;
+	const char* filename = "assets/Roboto-Regular.png";
+	unsigned char* data = stbi_load(filename, &width, &height, &numChannels, 0);
+	atlases.push_back(
+		std::make_shared<ui::FontAtlas>(
+			ui::FontAtlas(
+				mDevice, mSwapChain, filename, data, width, height, numChannels
+			)
+		));
+	stbi_image_free(data);
+
+	mFont = ui::LoadFont(mDevice, LoadTextResource("Roboto-Regular.fnt"), atlases);
+	mTextBox = std::make_shared<TextBox>(TextBox(mDevice, mSwapChain, mFont, "Hello world!"));
 }
 
 float App::getTime()
 {
 	return (float)glfwGetTime();
+}
+
+TextBox::TextBox(
+	Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+	Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain,
+	std::shared_ptr<ui::Font> font,
+	std::string text):
+		font(font),
+		text(text)
+{
+	Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
+	PSOCreateInfo.PSODesc.Name = "Text PSO";
+	PSOCreateInfo.PSODesc.PipelineType = Diligent::PIPELINE_TYPE_GRAPHICS;
+	PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
+	PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = swapChain->GetDesc().ColorBufferFormat;
+	PSOCreateInfo.GraphicsPipeline.DSVFormat = swapChain->GetDesc().DepthBufferFormat;
+	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
+	PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::False;
+
+	Diligent::BlendStateDesc BlendState;
+	BlendState.RenderTargets[0].BlendEnable = Diligent::True;
+	BlendState.RenderTargets[0].SrcBlend = Diligent::BLEND_FACTOR_SRC_ALPHA;
+	BlendState.RenderTargets[0].DestBlend = Diligent::BLEND_FACTOR_INV_SRC_ALPHA;
+	PSOCreateInfo.GraphicsPipeline.BlendDesc = BlendState;
+
+	Diligent::ShaderCreateInfo ShaderCI;
+	ShaderCI.SourceLanguage = Diligent::SHADER_SOURCE_LANGUAGE_HLSL;
+	ShaderCI.UseCombinedTextureSamplers = Diligent::True;
+
+	// Create a vertex shader
+	Diligent::RefCntAutoPtr<Diligent::IShader> pVS;
+	{
+		ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_VERTEX;
+		ShaderCI.EntryPoint = "main";
+		ShaderCI.Desc.Name = "Glyph vertex shader";
+		ShaderCI.Source = GlyphVSSource;
+		renderDevice->CreateShader(ShaderCI, &pVS);
+
+		Diligent::BufferDesc CBDesc;
+		CBDesc.Name = "VS constants CB";
+		CBDesc.Size = sizeof(glm::mat4);
+		CBDesc.Usage = Diligent::USAGE_DYNAMIC;
+		CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
+		CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
+		renderDevice->CreateBuffer(CBDesc, nullptr, &mVSConstants);
+	}
+
+	// Create a pixel shader
+	Diligent::RefCntAutoPtr<Diligent::IShader> pPS;
+	{
+		ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
+		ShaderCI.EntryPoint = "main";
+		ShaderCI.Desc.Name = "Glyph pixel shader";
+		ShaderCI.Source = GlyphPSSource;
+		renderDevice->CreateShader(ShaderCI, &pPS);
+
+		Diligent::BufferDesc CBDesc;
+		CBDesc.Name = "PS constants CB";
+		CBDesc.Size = sizeof(GlyphPSConstants);
+		CBDesc.Usage = Diligent::USAGE_DYNAMIC;
+		CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
+		CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
+		renderDevice->CreateBuffer(CBDesc, nullptr, &mPSConstants);
+	}
+
+	PSOCreateInfo.pVS = pVS;
+	PSOCreateInfo.pPS = pPS;
+
+	Diligent::LayoutElement LayoutElems[] =
+	{
+		// Attribute 0 - vertex position
+		Diligent::LayoutElement{0, 0, 2, Diligent::VT_FLOAT32, Diligent::False},
+		// Attribute 1 - texture coordinate
+		Diligent::LayoutElement{1, 0, 2, Diligent::VT_FLOAT32, Diligent::False}
+	};
+	PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = LayoutElems;
+	PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements = _countof(LayoutElems);
+	PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = Diligent::SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
+
+	Diligent::ShaderResourceVariableDesc variables[] =
+	{
+		{ Diligent::SHADER_TYPE_PIXEL, "g_Texture", Diligent::SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE }
+	};
+	PSOCreateInfo.PSODesc.ResourceLayout.Variables = variables;
+	PSOCreateInfo.PSODesc.ResourceLayout.NumVariables = _countof(variables);
+
+	Diligent::ImmutableSamplerDesc samplers[] =
+	{
+		{ Diligent::SHADER_TYPE_PIXEL, "g_Texture", Diligent::Sam_LinearClamp }
+	};
+	PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = samplers;
+	PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(samplers);
+
+	renderDevice->CreateGraphicsPipelineState(PSOCreateInfo, &mPSO);
+
+	mPSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->Set(mVSConstants);
+	mPSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants")->Set(mPSConstants);
+	mPSO->CreateShaderResourceBinding(&mSRB, true);
+
+	mSRB->GetVariableByName(Diligent::SHADER_TYPE_PIXEL, "g_Texture")->
+		Set(font->atlases[0]->textureSRV);
+	
+	Diligent::BufferDesc IndBuffDesc;
+	IndBuffDesc.Name = "Gliph quad index buffer";
+	IndBuffDesc.Usage = Diligent::USAGE_IMMUTABLE;
+	IndBuffDesc.BindFlags = Diligent::BIND_INDEX_BUFFER;
+	IndBuffDesc.Size = sizeof(QuadIndices);
+	Diligent::BufferData IBData;
+	IBData.pData = QuadIndices;
+	IBData.DataSize = sizeof(QuadIndices);
+	renderDevice->CreateBuffer(IndBuffDesc, &IBData, &mQuadIndexBuffer);
+}
+
+void TextBox::draw(
+	Diligent::RefCntAutoPtr<Diligent::IDeviceContext> context,
+	glm::mat4 modelViewProjection,
+	float sizePx,
+	float opacity)
+{
+	float scale = sizePx / (float)font->lineHeight;
+	glm::vec2 pos = glm::vec2(0.0f, -font->baseline) * scale;
+	for (int i = 0; i < text.size(); i++)
+	{
+		int symbol = text[i];
+		if (symbol == '\n')
+		{
+			pos.y += font->lineHeight * scale;
+			continue;
+		}
+
+		ui::FontCharacter& character = this->font->characters[symbol];
+
+		if (symbol == ' ')
+		{
+			pos.x += character.xAdvance * scale;
+			continue;
+		}
+
+		glm::mat4 MVP = modelViewProjection * glm::scale(
+				glm::translate(glm::identity<glm::mat4>(), glm::vec3(pos, 0.0f)),
+				glm::vec3(scale));
+		{
+			Diligent::MapHelper<glm::mat4> CBConstants(context, mVSConstants,
+				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+			*CBConstants = glm::transpose(MVP);
+		}
+		{
+			Diligent::MapHelper<GlyphPSConstants> CBConstants(context, mPSConstants,
+				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+			GlyphPSConstants constants;
+			constants.color = glm::vec3(0.0f);
+			constants.opacity = opacity;
+			constants.distanceRange = (float)font->distanceRange;
+			constants.atlasSize = glm::vec2(font->atlasWidth, font->atlasHeight);
+			*CBConstants = constants;
+		}
+
+		Diligent::Uint64   offset = 0;
+		Diligent::IBuffer* pBuffs[] = { character.vertexBuffer };
+		context->SetVertexBuffers(0, 1, pBuffs, &offset,
+			Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+			Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
+		context->SetIndexBuffer(mQuadIndexBuffer, 0,
+			Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+		context->SetPipelineState(mPSO);
+
+		context->CommitShaderResources(mSRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+		Diligent::DrawIndexedAttribs DrawAttrs;
+		DrawAttrs.IndexType = Diligent::VT_UINT32;
+		DrawAttrs.NumIndices = _countof(QuadIndices);
+		DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
+
+		context->DrawIndexed(DrawAttrs);
+
+		pos.x += character.xAdvance * scale;
+	}
 }

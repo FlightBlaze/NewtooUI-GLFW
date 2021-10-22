@@ -6,13 +6,18 @@ cmake_minimum_required (VERSION 3.8)
 project ("MyProject")
 
 # Add source to this project's executable.
-add_executable (MyProject "MyProject.cpp" "MyProject.h" "App.h" "App.cpp" "RenderTarget.h" "Diligent.h" "Diligent.cpp" "RenderTarget.cpp" "DualRenderTarget.h" "DualRenderTarget.cpp" "Resource.h" "Resource.cpp")
+
+add_executable (MyProject "MyProject.cpp" "MyProject.h" "App.h" "App.cpp" "RenderTarget.h" "Diligent.h" "Diligent.cpp" "RenderTarget.cpp" "DualRenderTarget.h" "DualRenderTarget.cpp" "Resource.h" "Resource.cpp" "submodules/stb/stb_image.cpp")
 
 target_include_directories(MyProject PRIVATE ".")
 
 # Copy assets to the binary directory
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/assets/)
+
+# stb_image
+
+target_include_directories( MyProject PRIVATE "submodules/stb" )
 
 # DiligentEngine
 
@@ -34,26 +39,11 @@ target_link_libraries( MyProject
         "GenericCodeGend"
         "MachineIndependentd"
         "GraphicsEngineOpenGL_64d"
+        "GraphicsEngineD3D11_64d"
         "opengl32"
         "dxgi.lib"
         "d3d11.lib"
         "d3dcompiler.lib" )
-
-# add_subdirectory("submodules/DiligentCore")
-# target_include_directories( MyProject PRIVATE
-#         "submodules/DiligentCore" )
-# target_link_libraries( MyProject
-#         Diligent-Common
-#         Diligent-GraphicsEngineOpenGL-shared
-#         Diligent-GraphicsEngineVk-shared )
-
-# NewtooUI
-
-add_subdirectory("submodules/NewtooUI")
-target_include_directories( MyProject PRIVATE
-        "submodules/NewtooUI/include" )
-target_link_libraries( MyProject
-        NewtooUI )
 
 # glm
 
@@ -70,5 +60,13 @@ target_include_directories( MyProject PRIVATE
         "submodules/glfw/include" )
 target_link_libraries( MyProject
         glfw )
+
+# NewtooUI
+
+add_subdirectory("submodules/NewtooUI")
+target_include_directories( MyProject PRIVATE
+        "submodules/NewtooUI/include" )
+target_link_libraries( MyProject
+        NewtooUI )
 
 # TODO: Add tests and install targets if needed.

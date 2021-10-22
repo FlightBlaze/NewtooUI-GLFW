@@ -8,7 +8,7 @@ struct RenderTargetCreateInfo {
     Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain;
     Diligent::RefCntAutoPtr<Diligent::IShader> pixelShader;
     Diligent::RefCntAutoPtr<Diligent::IBuffer> uniformBuffer;
-    int width, height;
+    int width = 0, height = 0;
     bool alphaBlending = false;
 };
 
