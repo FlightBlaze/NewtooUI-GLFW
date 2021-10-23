@@ -151,8 +151,9 @@ void App::draw()
 		for (int i = 0; i < kernelSize; i++) {
 			float offset = (float)(i - kernelCenter);
 			float stepPx = 1.0f;
-			glm::vec3 offsetInDirection = glm::vec3(glm::vec2(blurDirection * offset * stepPx), 0.0f);
-			glm::mat4 MVP = mModelViewProjection * glm::translate(offsetInDirection);
+			glm::vec2 resolution = glm::vec2(mWidth, mHeight);
+			glm::vec3 offsetInDirection = glm::vec3(glm::vec2(blurDirection * offset * stepPx) / resolution, 0.0f);
+			glm::mat4 MVP = glm::translate(offsetInDirection) * mModelViewProjection;
 			// Write model view projection matrix to uniform
 			{
 				Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
@@ -230,13 +231,15 @@ void App::update()
 
 	mQuadPosX.update(mDeltaTime);
 
+	mRotation = sinf(getTime()) * 0.57f;
+
 	glm::mat4 view = glm::identity<glm::mat4>();
 	glm::mat4 projection = glm::ortho(0.0f, (float)mWidth, (float)mHeight, 0.0f); // glm::perspective(65.0f, (float)mWidth / (float)mHeight, 0.001f, 100.0f);
 	glm::mat4 model = glm::rotate(glm::translate(glm::vec3(mWidth / 2 + mQuadPosX.currentValue, mHeight / 2, 0.0f)), mRotation, glm::vec3(0, 0, 1));
 
 	mModelViewProjection = projection * view * model;
 
-	glm::mat4 textModel = glm::translate(glm::vec3(100.0f, 100.0f, 0.0f));
+	glm::mat4 textModel = glm::rotate(glm::translate(glm::vec3(100.0f, 100.0f, 0.0f)), mRotation, glm::vec3(0, 0, 1));
 	mTextModelViewProjection = projection * view * textModel;
 	mTextSize = sinf(getTime()) * 32.0f + 32.0f + 10.0f;
 }
