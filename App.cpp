@@ -1,5 +1,6 @@
 ﻿#include <App.h>
 #include <Resource.h>
+#include <Path.h>
 #include <iostream>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
@@ -10,22 +11,6 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/matrix_transform_2d.hpp>
 #include <stb_image.h>
-
-float lerpf(float a, float b, float t)
-{
-	return a + t * (b - a);
-}
-
-float invlerpf(float a, float b, float v)
-{
-	return (v - a) / (b - a);
-}
-
-float remapf(float iMin, float iMax, float oMin, float oMax, float v)
-{
-	float t = invlerpf(iMin, iMax, v);
-	return lerpf(oMin, oMax, t);
-}
 
 App* findAppByWindow(GLFWwindow* window)
 {
@@ -112,7 +97,7 @@ void App::draw()
 		*CBConstants = motionBlur;
 	}*/
 
-	const float ClearColor[] = { 0.75f,  0.75f,  0.75f, 1.0f };
+	const float ClearColor[] = { 0.5f,  0.5f,  0.5f, 1.0f };
 	const float Transparent[] = { 0.0f,  0.0f,  0.0f, 0.0f };
 
 	// mRenderTargets.current->use(mImmediateContext);
@@ -212,6 +197,9 @@ void App::draw()
 
 	// mRenderTargets.current->draw(mImmediateContext);
 
+	mSolidFillRenderer->draw(mImmediateContext,
+		glm::translate(mViewProjection, glm::vec3(glm::vec2(mWidth / 2.0f, mHeight / 2.0f) - mSquircleFill.offset, 0.0f)), mSquircleFill, glm::vec3(1.0f), 1.0f);
+
 	mTextRenderer->draw(mImmediateContext,
 		mTextModelViewProjection, "Hello world!", mTextSize, 1.0f);
 	
@@ -251,7 +239,7 @@ void App::update()
 
 	glm::mat4 view = glm::identity<glm::mat4>();
 	glm::mat4 projection = glm::ortho(0.0f, (float)mWidth, (float)mHeight, 0.0f); // glm::perspective(65.0f, (float)mWidth / (float)mHeight, 0.001f, 100.0f);
-	glm::mat4 model = glm::rotate(glm::translate(glm::vec3(mWidth / 2 + mQuadPosX.currentValue, mHeight / 2, 0.0f)), mRotation, glm::vec3(0, 0, 1));
+	glm::mat4 model = glm::rotate(glm::translate(glm::vec3(mWidth / 2 + mQuadPosX.currentValue, mHeight - 80.0f, 0.0f)), mRotation, glm::vec3(0, 0, 1));
 
 	mViewProjection = projection * view;
 	mModelViewProjection = mViewProjection * model;
@@ -463,6 +451,20 @@ void App::initializeResources()
 
 	mRenderTargets.current = std::make_shared<RenderTarget>(renderTargetCI);
 	mRenderTargets.previous = std::make_shared<RenderTarget>(renderTargetCI);
+
+	mSolidFillRenderer = std::make_shared<SolidFillRenderer>(SolidFillRenderer(mDevice, mSwapChain));
+
+	tube::Path path;
+	const static glm::vec2 size = glm::vec2(100.0f, 160.0f);
+	path.points = {
+		tube::Point(glm::vec3(0.0f, size.y / 2.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f)),
+		tube::Point(glm::vec3(size.x / 2.0f, 0.0f, 0.0f), glm::vec3(size.x, 0.0f, 0.0f)),
+		tube::Point(glm::vec3(size.x, size.y / 2.0f, 0.0f), glm::vec3(size.x, size.y, 0.0f)),
+		tube::Point(glm::vec3(size.x / 2.0f, size.y, 0.0f), glm::vec3(0.0f, size.y, 0.0f)),
+		tube::Point(glm::vec3(0.0f, size.y / 2.0f, 0.0f))
+	};
+
+	mSquircleFill = CreateFill(mDevice, path, true);
 
 	initializeFont();
 }

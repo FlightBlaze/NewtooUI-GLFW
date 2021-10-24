@@ -7,7 +7,7 @@ project ("MyProject")
 
 # Add source to this project's executable.
 
-add_executable (MyProject "MyProject.cpp" "MyProject.h" "App.h" "App.cpp" "RenderTarget.h" "Diligent.h" "Diligent.cpp" "RenderTarget.cpp" "DualRenderTarget.h" "DualRenderTarget.cpp" "Resource.h" "Resource.cpp" "submodules/stb/stb_image.cpp" "TextRenderer.h" "TextRenderer.cpp")
+add_executable (MyProject "MyProject.cpp" "MyProject.h" "App.h" "App.cpp" "RenderTarget.h" "Diligent.h" "Diligent.cpp" "RenderTarget.cpp" "DualRenderTarget.h" "DualRenderTarget.cpp" "Resource.h" "Resource.cpp" "submodules/stb/stb_image.cpp" "TextRenderer.h" "TextRenderer.cpp" "Shape.h" "Shape.cpp" "MathExtras.h" "MathExtras.cpp")
 
 target_include_directories(MyProject PRIVATE ".")
 
@@ -60,6 +60,14 @@ target_include_directories( MyProject PRIVATE
         "submodules/glfw/include" )
 target_link_libraries( MyProject
         glfw )
+
+# tube
+
+add_subdirectory("submodules/tube")
+target_include_directories( MyProject PRIVATE
+        "submodules/tube/include" )
+target_link_libraries( MyProject
+        tube )
 
 # NewtooUI
 

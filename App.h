@@ -5,6 +5,7 @@
 #include <DualRenderTarget.h>
 #include <RenderTarget.h>
 #include <TextRenderer.h>
+#include <Shape.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <Spring.hh>
@@ -12,15 +13,6 @@
 #include <memory>
 #include <vector>
 #include <string>
-
-// Linear interpolation
-float lerpf(float a, float b, float t);
-
-// Inverse linear interpolation
-float invlerpf(float a, float b, float v);
-
-// Remap
-float remapf(float iMin, float iMax, float oMin, float oMax, float v);
 
 struct Vertex {
     glm::vec3 pos;
@@ -84,6 +76,8 @@ private:
     ui::Spring mQuadPosX;
     std::shared_ptr<ui::Font> mFont;
     std::shared_ptr<TextRenderer> mTextRenderer;
+    Fill mSquircleFill;
+    std::shared_ptr<SolidFillRenderer> mSolidFillRenderer;
 
     float mQuadTime = 0.0f;
     float mSecondTime = 0.0f;
