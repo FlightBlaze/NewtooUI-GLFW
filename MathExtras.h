@@ -12,3 +12,5 @@ float remapf(float iMin, float iMax, float oMin, float oMax, float v);
 #include <glm/glm.hpp>
 
 bool isPointInTriange(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec2 point);
+
+glm::mat4 toMatrix3D(glm::mat3 mat2d);

@@ -60,7 +60,7 @@ Fill CreateFill(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
 	MinMax2 bounds = CalculateBoundingBox2D(shape.verts);
 	fill.width = bounds.maxX - bounds.minX;
 	fill.height = bounds.maxY - bounds.minY;
-	fill.offset = glm::vec2(-bounds.minX + fill.width / 2.0f, -bounds.minY + fill.height / 2.0f);
+	fill.offset = glm::vec2(-bounds.minX, -bounds.minY);
 	std::vector<int> indices = CreateIndicesConvex(shape.verts.size());
 	std::vector<glm::vec2> UV = GenerateUV(bounds, shape.verts);
 	std::vector<ShapeVertex> vertices;

@@ -42,7 +42,7 @@ void App::mouseButtonCallback(GLFWwindow* window, int button, int action, int mo
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
 		double xpos, ypos;
 		glfwGetCursorPos(window, &xpos, &ypos);
-		glm::vec2 relativePoint = self->mSquirclePos + self->mSquircleFill.offset - glm::vec2((float)xpos, (float)ypos);
+		glm::vec2 relativePoint = self->mSquircleFill.offset + glm::vec2((float)xpos, (float)ypos) - self->mSquirclePos;
 		bool isInside = self->mSquircleFill.containsPoint(relativePoint);
 		std::cout << "Is inside squircle: " << isInside << std::endl;
 	}
@@ -261,7 +261,7 @@ void App::update()
 	mTextModelViewProjection = mViewProjection * textModel;
 	mTextSize = sinf(getTime()) * 32.0f + 32.0f + 10.0f;
 
-	mSquirclePos = glm::vec2(mWidth / 2, mHeight / 2);
+	mSquirclePos = glm::vec2(mWidth / 2 - mSquircleFill.width / 2, mHeight / 2 - mSquircleFill.height / 2);
 }
 
 void App::resize(int width, int height)

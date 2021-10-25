@@ -52,3 +52,32 @@ bool isPointInTriange(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec2 point)
 	//return side1 && side2 && side3;
 	return barycentricIsPointInTriangle(a, b, c, point);
 }
+
+// Convert matrix 3x3 to matrix 4x4
+// https://developer.mozilla.org/en-US/docs/Web/CSS/transform-function/matrix()
+
+glm::mat4 toMatrix3D(glm::mat3 mat2d)
+{
+	float a, b, c, d, tx, ty;
+	// a c tx
+	// b d ty
+	// 0 0 1
+	a = mat2d[0][0];
+	c = mat2d[0][1];
+	tx = mat2d[0][2];
+	b = mat2d[1][0];
+	d = mat2d[1][1];
+	ty = mat2d[1][2];
+	// a b 0 0
+	// c d 0 0
+	// 0 0 1 0
+	// tx ty 0 1
+	glm::mat4 mat3d = glm::mat4(1.0f);
+	mat3d[0][0] = a;
+	mat3d[1][0] = b;
+	mat3d[0][1] = c;
+	mat3d[1][1] = d;
+	mat3d[0][3] = tx;
+	mat3d[1][3] = ty;
+	return mat3d;
+}
