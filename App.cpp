@@ -36,6 +36,18 @@ void App::resizeCallback(GLFWwindow* window, int width, int height)
 	self->mHeight = height;
 }
 
+void App::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
+{
+	auto* self = findAppByWindow(window);
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+		double xpos, ypos;
+		glfwGetCursorPos(window, &xpos, &ypos);
+		glm::vec2 relativePoint = self->mSquirclePos + self->mSquircleFill.offset - glm::vec2((float)xpos, (float)ypos);
+		bool isInside = self->mSquircleFill.containsPoint(relativePoint);
+		std::cout << "Is inside squircle: " << isInside << std::endl;
+	}
+}
+
 int App::run()
 {
 	if (!glfwInit())
@@ -55,6 +67,7 @@ int App::run()
 
 	glfwSetWindowUserPointer(mWindow, this);
 	glfwSetFramebufferSizeCallback(mWindow, &resizeCallback);
+	glfwSetMouseButtonCallback(mWindow, &mouseButtonCallback);
 	glfwGetWindowSize(mWindow, &mWidth, &mHeight);
 
 	initializeDiligentEngine();
@@ -198,7 +211,7 @@ void App::draw()
 	// mRenderTargets.current->draw(mImmediateContext);
 
 	mSolidFillRenderer->draw(mImmediateContext,
-		glm::translate(mViewProjection, glm::vec3(glm::vec2(mWidth / 2.0f, mHeight / 2.0f) - mSquircleFill.offset, 0.0f)), mSquircleFill, glm::vec3(1.0f), 1.0f);
+		glm::translate(mViewProjection, glm::vec3(mSquirclePos - mSquircleFill.offset, 0.0f)), mSquircleFill, glm::vec3(1.0f), 1.0f);
 
 	mTextRenderer->draw(mImmediateContext,
 		mTextModelViewProjection, "Hello world!", mTextSize, 1.0f);
@@ -247,6 +260,8 @@ void App::update()
 	glm::mat4 textModel = glm::rotate(glm::translate(glm::vec3(100.0f, 100.0f, 0.0f)), mRotation, glm::vec3(0, 0, 1));
 	mTextModelViewProjection = mViewProjection * textModel;
 	mTextSize = sinf(getTime()) * 32.0f + 32.0f + 10.0f;
+
+	mSquirclePos = glm::vec2(mWidth / 2, mHeight / 2);
 }
 
 void App::resize(int width, int height)

@@ -4,6 +4,15 @@
 #include <glm/glm.hpp>
 #include <Path.h>
 
+struct MinMax2 {
+    float minX, maxX, minY, maxY;
+};
+
+struct ShapeVertex {
+    glm::vec3 position;
+    glm::vec2 texCoord;
+};
+
 class Fill {
 public:
 	Diligent::RefCntAutoPtr<Diligent::IBuffer> vertexBuffer;
@@ -12,6 +21,11 @@ public:
     float width = 0;
     float height = 0;
     glm::vec2 offset;
+    std::vector<ShapeVertex> vertices;
+    std::vector<int> indices;
+    MinMax2 bounds;
+
+    bool containsPoint(glm::vec2 point);
 };
 
 Fill CreateFill(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
@@ -62,11 +76,6 @@ void main(in  PSInput  PSIn,
     PSOut.Color = float4(g_Color, g_Opacity);
 }
 )";
-
-struct ShapeVertex {
-    glm::vec3 position;
-    glm::vec2 texCoord;
-};
 
 static const char* ShapeVSSource = R"(
 cbuffer Constants

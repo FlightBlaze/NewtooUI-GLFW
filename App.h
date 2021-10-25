@@ -35,6 +35,7 @@ public:
 
     static void errorCallback(int error, const char* description);
     static void resizeCallback(GLFWwindow* window, int width, int height);
+    static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 
 private:
     void initializeDiligentEngine();
@@ -76,13 +77,15 @@ private:
     ui::Spring mQuadPosX;
     std::shared_ptr<ui::Font> mFont;
     std::shared_ptr<TextRenderer> mTextRenderer;
-    Fill mSquircleFill;
     std::shared_ptr<SolidFillRenderer> mSolidFillRenderer;
 
     float mQuadTime = 0.0f;
     float mSecondTime = 0.0f;
     int mLastFPS = 0;
     int mFPS = 0;
+public:
+    glm::vec2 mSquirclePos;
+    Fill mSquircleFill;
 };
 
 static const char* VSSource = R"(

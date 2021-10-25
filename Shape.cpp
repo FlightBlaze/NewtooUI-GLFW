@@ -8,10 +8,10 @@
 #include <App.h>
 
 std::vector<int> CreateIndicesConvex(size_t numVertices) {
-	size_t amount = numVertices * 3;
+	size_t amount = (numVertices - 2) * 3;
 	auto indices = std::vector<int>(amount);
-	int k = 0;
-	for (size_t i = 3; i < amount; i += 3)
+	int k = 1;
+	for (size_t i = 0; i < amount; i += 3)
 	{
 		indices[i] = 0;
 
@@ -22,10 +22,6 @@ std::vector<int> CreateIndicesConvex(size_t numVertices) {
 	}
 	return indices;
 }
-
-struct MinMax2 {
-	float minX, maxX, minY, maxY;
-};
 
 MinMax2 CalculateBoundingBox2D(std::vector<glm::vec3>& verts) {
 	MinMax2 bounds;
@@ -94,6 +90,9 @@ Fill CreateFill(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
 	IBData.DataSize = indices.size() * sizeof(int);
 	renderDevice->CreateBuffer(IndBuffDesc, &IBData, &fill.indexBuffer);
 
+	fill.vertices = vertices;
+	fill.indices = indices;
+	fill.bounds = bounds;
 	fill.numIndices = (int)indices.size();
 	return fill;
 }
@@ -216,4 +215,16 @@ void SolidFillRenderer::draw(
 	DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
 
 	context->DrawIndexed(DrawAttrs);
+}
+
+bool Fill::containsPoint(glm::vec2 point)
+{
+	for (size_t i = 0; i < this->indices.size(); i += 3) {
+		glm::vec2 a = glm::vec2(this->vertices[this->indices[i + 0LL]].position);
+		glm::vec2 b = glm::vec2(this->vertices[this->indices[i + 1LL]].position);
+		glm::vec2 c = glm::vec2(this->vertices[this->indices[i + 2LL]].position);
+		if (isPointInTriange(a, b, c, point))
+			return true;
+	}
+	return false;
 }
