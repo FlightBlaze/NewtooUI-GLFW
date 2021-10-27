@@ -52,7 +52,11 @@ private:
     int mWidth = 0,
         mHeight = 0;
 
+    #ifdef PLATFORM_MACOS
+    Diligent::RENDER_DEVICE_TYPE mDeviceType = Diligent::RENDER_DEVICE_TYPE_VULKAN;
+    #else
     Diligent::RENDER_DEVICE_TYPE mDeviceType = Diligent::RENDER_DEVICE_TYPE_D3D11;
+    #endif
     Diligent::RefCntAutoPtr<Diligent::IRenderDevice>  mDevice;
     Diligent::RefCntAutoPtr<Diligent::IDeviceContext> mImmediateContext;
     Diligent::RefCntAutoPtr<Diligent::ISwapChain> mSwapChain;

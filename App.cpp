@@ -2,10 +2,15 @@
 #include <Resource.h>
 #include <Path.h>
 #include <iostream>
+#ifdef PLATFORM_MACOS
+#define GLFW_EXPOSE_NATIVE_COCOA
+#include "Graphics/GraphicsEngineVulkan/interface/EngineFactoryVk.h"
+#else
 #define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
 #include "Graphics/GraphicsEngineOpenGL/interface/EngineFactoryOpenGL.h"
 #include "Graphics/GraphicsEngineD3D11/interface/EngineFactoryD3D11.h"
+#endif
+#include <GLFW/glfw3native.h>
 #include "Graphics/GraphicsTools/interface/CommonlyUsedStates.h"
 #include "Graphics/GraphicsTools/interface/MapHelper.hpp"
 #include <glm/gtx/transform.hpp>
@@ -279,11 +284,37 @@ void App::resize(int width, int height)
 
 void App::initializeDiligentEngine()
 {
-	Diligent::Win32NativeWindow window{ glfwGetWin32Window(mWindow) };
 	Diligent::SwapChainDesc SCDesc;
+	#ifdef PLATFORM_MACOS
+	Diligent::MacOSNativeWindow window { glfwGetCocoaWindow(mWindow) };
+
+	// We need at least 3 buffers in Metal to avoid massive
+    // performance degradation in full screen mode.
+    // https://github.com/KhronosGroup/MoltenVK/issues/808
+    SCDesc.BufferCount = 3;
+	#else
+	Diligent::Win32NativeWindow window{ glfwGetWin32Window(mWindow) };
+	#endif
 	switch (mDeviceType)
 	{
-		case Diligent::RENDER_DEVICE_TYPE_GLES:
+		#ifdef PLATFORM_MACOS
+		case Diligent::RENDER_DEVICE_TYPE_VULKAN:
+			{
+				auto* pFactoryVk = Diligent::GetEngineFactoryVk();
+				Diligent::EngineVkCreateInfo EngineCI;
+				
+				pFactoryVk->CreateDeviceAndContextsVk(EngineCI, &mDevice, &mImmediateContext);
+				if (!mDevice)
+				{
+					std::cerr << "Unable to initialize Diligent Engine in Vulkan mode. The API may not be available, "
+										"or required features may not be supported by this GPU/driver/OS version." << std::endl;
+					exit(-1);
+				}
+				pFactoryVk->CreateSwapChainVk(mDevice, mImmediateContext, SCDesc, window, &mSwapChain);
+				}
+			break;
+		#else
+		case Diligent::RENDER_DEVICE_TYPE_GL:
 			{
 #    if ENGINE_DLL
 				auto* GetEngineFactoryOpenGL = Diligent::LoadGraphicsEngineOpenGL();
@@ -322,6 +353,7 @@ void App::initializeDiligentEngine()
 				pFactoryD3D11->CreateSwapChainD3D11(mDevice, mImmediateContext, SCDesc, Diligent::FullScreenModeDesc{}, window, &mSwapChain);
 			}
 			break;
+		#endif
 		default:
 			std::cerr << "Unsupported render device type" << std::endl;
 			exit(-1);
@@ -498,7 +530,8 @@ void App::initializeFont() {
 		));
 	stbi_image_free(data);
 
-	mFont = ui::LoadFont(mDevice, LoadTextResource("Roboto-Regular.fnt"), atlases);
+	std::string fontFnt = LoadTextResource("Roboto-Regular.fnt");
+	mFont = ui::LoadFont(mDevice, fontFnt, atlases);
 	mTextRenderer = std::make_shared<TextRenderer>(TextRenderer(mDevice, mSwapChain, mFont));
 }
 

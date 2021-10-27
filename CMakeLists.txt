@@ -5,11 +5,14 @@ cmake_minimum_required (VERSION 3.8)
 
 project ("MyProject")
 
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Add source to this project's executable.
 
 add_executable (MyProject "MyProject.cpp" "MyProject.h" "App.h" "App.cpp" "RenderTarget.h" "Diligent.h" "Diligent.cpp" "RenderTarget.cpp" "DualRenderTarget.h" "DualRenderTarget.cpp" "Resource.h" "Resource.cpp" "submodules/stb/stb_image.cpp" "TextRenderer.h" "TextRenderer.cpp" "Shape.h" "Shape.cpp" "MathExtras.h" "MathExtras.cpp" "Elements.h" "Elements.cpp")
 
-target_include_directories(MyProject PRIVATE ".")
+target_include_directories(MyProject PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # Copy assets to the binary directory
 
@@ -28,22 +31,37 @@ set(DILIGENT_LIB "submodules/DiligentCore/install/lib/Debug")
 
 target_link_directories( MyProject PRIVATE ${DILIGENT_LIB} )
 
-target_link_libraries( MyProject
-        "DiligentCore"
-        "glslangd"
-        "HLSLd"
-        "OGLCompilerd"
-        "OSDependentd"
-        "spirv-cross-cored"
-        "glew-static"
-        "GenericCodeGend"
-        "MachineIndependentd"
-        "GraphicsEngineOpenGL_64d"
-        "GraphicsEngineD3D11_64d"
-        "opengl32"
-        "dxgi.lib"
-        "d3d11.lib"
-        "d3dcompiler.lib" )
+if(APPLE)
+        target_link_libraries( MyProject
+                "DiligentCore"
+                "HLSL"
+                "OSDependent"
+                "spirv-cross-core"
+                "SPIRV-Tools-opt"
+                "SPIRV-Tools"
+                "SPIRV"
+                "GenericCodeGen"
+                "MachineIndependent"
+                "GraphicsEngineVk" )
+else()
+        target_link_libraries( MyProject
+                "DiligentCore"
+                "glslangd"
+                "HLSLd"
+                "OGLCompilerd"
+                "OSDependentd"
+                "spirv-cross-cored"
+                "glew-static"
+                "GenericCodeGend"
+                "MachineIndependentd"
+                "GraphicsEngineOpenGL_64d"
+                "GraphicsEngineD3D11_64d"
+                "opengl32"
+                "dxgi.lib"
+                "d3d11.lib"
+                "d3dcompiler.lib" )
+
+endif()
 
 # glm
 
