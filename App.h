@@ -6,7 +6,8 @@
 #include <RenderTarget.h>
 #include <TextRenderer.h>
 #include <Shape.h>
-#include <GLFW/glfw3.h>
+// #include <GLFW/glfw3.h>
+#include <SDL.h>
 #include <glm/glm.hpp>
 #include <Spring.hh>
 #include <Font.hh>
@@ -33,9 +34,9 @@ public:
 
     App();
 
-    static void errorCallback(int error, const char* description);
-    static void resizeCallback(GLFWwindow* window, int width, int height);
-    static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+    // static void errorCallback(int error, const char* description);
+    // static void resizeCallback(GLFWwindow* window, int width, int height);
+    // static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 
 private:
     void initializeDiligentEngine();
@@ -48,9 +49,15 @@ private:
     float mCurrentTime = 0.0f;
     float mDeltaTime = 0.0f;
 
-    GLFWwindow* mWindow = nullptr;
+    // GLFWwindow* mWindow = nullptr;
+    SDL_Window* mWindow = nullptr;
     int mWidth = 0,
         mHeight = 0;
+    
+    float mDotsPerPixel = 0.0f;
+
+    int getActualWidth();
+    int getActualHeight();
 
     #ifdef PLATFORM_MACOS
     Diligent::RENDER_DEVICE_TYPE mDeviceType = Diligent::RENDER_DEVICE_TYPE_VULKAN;

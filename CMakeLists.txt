@@ -10,58 +10,88 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add source to this project's executable.
 
-add_executable (MyProject "MyProject.cpp" "MyProject.h" "App.h" "App.cpp" "RenderTarget.h" "Diligent.h" "Diligent.cpp" "RenderTarget.cpp" "DualRenderTarget.h" "DualRenderTarget.cpp" "Resource.h" "Resource.cpp" "submodules/stb/stb_image.cpp" "TextRenderer.h" "TextRenderer.cpp" "Shape.h" "Shape.cpp" "MathExtras.h" "MathExtras.cpp" "Elements.h" "Elements.cpp")
+if( APPLE )
+        set( PLATFORM_SOURCE "platform/MacOS/LayerManager.h" "platform/MacOS/LayerManager.m" )
+endif()
+
+add_executable (MyProject "MyProject.cpp" "MyProject.h" "App.h" "App.cpp" "RenderTarget.h" "Diligent.h" "Diligent.cpp" "RenderTarget.cpp" "DualRenderTarget.h" "DualRenderTarget.cpp" "Resource.h" "Resource.cpp" "submodules/stb/stb_image.cpp" "TextRenderer.h" "TextRenderer.cpp" "Shape.h" "Shape.cpp" "MathExtras.h" "MathExtras.cpp" "Elements.h" "Elements.cpp" ${PLATFORM_SOURCE})
 
 target_include_directories(MyProject PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # Copy assets to the binary directory
 
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/assets/)
+if( APPLE )
+        file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/assets/)
+else()
+        file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/assets/)
+endif()
 
 # stb_image
 
 target_include_directories( MyProject PRIVATE "submodules/stb" )
+
+# QuartzCore
+
+if( APPLE )
+        enable_language(OBJCXX)
+        find_library( QUARTZ_CORE QuartzCore REQUIRED )
+        find_library( METAL Metal REQUIRED )
+        target_link_libraries( MyProject ${QUARTZ_CORE} ${METAL} )
+endif()
+
+# SDL
+
+target_include_directories( MyProject PRIVATE
+        "submodules/SDL/include" )
+add_subdirectory( "submodules/SDL" )
+target_link_libraries( MyProject SDL2-static )
 
 # DiligentEngine
 
 target_include_directories( MyProject PRIVATE
         "submodules/DiligentCore/install/include" )
 
-set(DILIGENT_LIB "submodules/DiligentCore/install/lib/Debug")
+add_subdirectory( "submodules/DiligentCore" )
 
-target_link_directories( MyProject PRIVATE ${DILIGENT_LIB} )
+target_link_libraries( MyProject Diligent-GraphicsEngineVk-shared Diligent-Common )
 
-if(APPLE)
-        target_link_libraries( MyProject
-                "DiligentCore"
-                "HLSL"
-                "OSDependent"
-                "spirv-cross-core"
-                "SPIRV-Tools-opt"
-                "SPIRV-Tools"
-                "SPIRV"
-                "GenericCodeGen"
-                "MachineIndependent"
-                "GraphicsEngineVk" )
-else()
-        target_link_libraries( MyProject
-                "DiligentCore"
-                "glslangd"
-                "HLSLd"
-                "OGLCompilerd"
-                "OSDependentd"
-                "spirv-cross-cored"
-                "glew-static"
-                "GenericCodeGend"
-                "MachineIndependentd"
-                "GraphicsEngineOpenGL_64d"
-                "GraphicsEngineD3D11_64d"
-                "opengl32"
-                "dxgi.lib"
-                "d3d11.lib"
-                "d3dcompiler.lib" )
 
-endif()
+
+# set(DILIGENT_LIB "submodules/DiligentCore/install/lib/Debug")
+
+# target_link_directories( MyProject PRIVATE ${DILIGENT_LIB} )
+
+# if(APPLE)
+#         target_link_libraries( MyProject
+#                 "DiligentCore"
+#                 "HLSL"
+#                 "OSDependent"
+#                 "spirv-cross-core"
+#                 "SPIRV-Tools-opt"
+#                 "SPIRV-Tools"
+#                 "SPIRV"
+#                 "GenericCodeGen"
+#                 "MachineIndependent"
+#                 "GraphicsEngineVk" )
+# else()
+#         target_link_libraries( MyProject
+#                 "DiligentCore"
+#                 "glslangd"
+#                 "HLSLd"
+#                 "OGLCompilerd"
+#                 "OSDependentd"
+#                 "spirv-cross-cored"
+#                 "glew-static"
+#                 "GenericCodeGend"
+#                 "MachineIndependentd"
+#                 "GraphicsEngineOpenGL_64d"
+#                 "GraphicsEngineD3D11_64d"
+#                 "opengl32"
+#                 "dxgi.lib"
+#                 "d3d11.lib"
+#                 "d3dcompiler.lib" )
+
+# endif()
 
 # glm
 

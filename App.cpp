@@ -3,24 +3,25 @@
 #include <Path.h>
 #include <iostream>
 #ifdef PLATFORM_MACOS
-#define GLFW_EXPOSE_NATIVE_COCOA
+extern "C" {
+#include <platform/MacOS/LayerManager.h>
+}
+// #define GLFW_EXPOSE_NATIVE_COCOA
 #include "Graphics/GraphicsEngineVulkan/interface/EngineFactoryVk.h"
 #else
-#define GLFW_EXPOSE_NATIVE_WIN32
+// #define GLFW_EXPOSE_NATIVE_WIN32
 #include "Graphics/GraphicsEngineOpenGL/interface/EngineFactoryOpenGL.h"
 #include "Graphics/GraphicsEngineD3D11/interface/EngineFactoryD3D11.h"
 #endif
-#include <GLFW/glfw3native.h>
+// #include <GLFW/glfw3native.h>
+#include <SDL_syswm.h>
+#include <SDL_events.h>
 #include "Graphics/GraphicsTools/interface/CommonlyUsedStates.h"
 #include "Graphics/GraphicsTools/interface/MapHelper.hpp"
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/matrix_transform_2d.hpp>
 #include <stb_image.h>
-
-App* findAppByWindow(GLFWwindow* window)
-{
-	return static_cast<App*>(glfwGetWindowUserPointer(window));
-}
+#include <unistd.h>
 
 App::App():
 	mQuadPhysicalProps(1.0f, 95.0f, 5.0f),
@@ -28,65 +29,77 @@ App::App():
 {
 }
 
-void App::errorCallback(int error, const char* description)
-{
-	std::cerr << "Error: " << description << std::endl;
-}
-
-void App::resizeCallback(GLFWwindow* window, int width, int height)
-{
-	auto* self = findAppByWindow(window);
-	self->resize(width, height);
-	self->mWidth = width;
-	self->mHeight = height;
-}
-
-void App::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
-{
-	auto* self = findAppByWindow(window);
-	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-		double xpos, ypos;
-		glfwGetCursorPos(window, &xpos, &ypos);
-		glm::vec2 relativePoint = self->mSquircleFill.offset + glm::vec2((float)xpos, (float)ypos) - self->mSquirclePos;
-		bool isInside = self->mSquircleFill.containsPoint(relativePoint);
-		std::cout << "Is inside squircle: " << isInside << std::endl;
-	}
-}
-
 int App::run()
 {
-	if (!glfwInit())
-	{
-		std::cerr << "Failed to initialize GLFW" << std::endl;
-		return -1;
+	if(SDL_Init( SDL_INIT_VIDEO ) != 0) {
+    	std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl;
+ 		exit(-1);
 	}
-
-	glfwSetErrorCallback(errorCallback);
-
-	mWindow = glfwCreateWindow(640, 480, "My Application", NULL, NULL);
-	if (!mWindow)
-	{
+	mWidth = 800;
+	mHeight = 600;
+	mWindow = SDL_CreateWindow(
+		"My Project",
+		SDL_WINDOWPOS_UNDEFINED,
+		SDL_WINDOWPOS_UNDEFINED,
+		mWidth,
+		mHeight,
+		SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+	
+	if(mWindow == nullptr) {
 		std::cerr << "Failed to create window" << std::endl;
-		return -1;
+		exit(-1);
 	}
 
-	glfwSetWindowUserPointer(mWindow, this);
-	glfwSetFramebufferSizeCallback(mWindow, &resizeCallback);
-	glfwSetMouseButtonCallback(mWindow, &mouseButtonCallback);
-	glfwGetWindowSize(mWindow, &mWidth, &mHeight);
+	float ddpi, hdpi, vdpi;
+	SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi);
+	float inchPx = 96;
+	mDotsPerPixel = hdpi / inchPx;
 
 	initializeDiligentEngine();
 	initializeResources();
 
-	while (!glfwWindowShouldClose(mWindow))
-	{
-		glfwPollEvents();
+	// resize(getActualWidth(), getActualHeight());
+
+	bool quit = false;
+	SDL_Event currentEvent;
+	while(!quit) {
+		while(SDL_PollEvent(&currentEvent) != 0) {
+			switch(currentEvent.type) {
+			case SDL_QUIT:
+				quit = true;
+				break;
+			case SDL_WINDOWEVENT:
+				switch(currentEvent.window.event) {
+				case SDL_WINDOWEVENT_RESIZED:
+					mWidth = currentEvent.window.data1;
+					mHeight = currentEvent.window.data2;
+					resize(mWidth, mHeight);
+					break;
+				default:
+					break;
+				}
+				break;
+			case SDL_MOUSEBUTTONDOWN:
+				if(currentEvent.button.button == SDL_BUTTON_LEFT) {
+					if(currentEvent.button.state == SDL_PRESSED) {
+						int x = currentEvent.button.x;
+						int y = currentEvent.button.y;
+						glm::vec2 relativePoint = mSquircleFill.offset +
+							glm::vec2((float)x, (float)y) - mSquirclePos;
+						bool isInside = mSquircleFill.containsPoint(relativePoint);
+						std::cout << "Is inside squircle: " << isInside << std::endl;
+					}
+				}
+				break;
+			default:
+				break;
+			}
+		}
 		update();
 		draw();
 	}
-
-	glfwDestroyWindow(mWindow);
-	glfwTerminate();
+	SDL_DestroyWindow(mWindow);
+	SDL_Quit();
 	return 0;
 }
 
@@ -196,24 +209,24 @@ void App::draw()
 		mImmediateContext->DrawIndexed(DrawAttrs);
 	}
 
-	/*int blurIterations = (int)fabsf(mQuadPosX.velocity) / 20;
-	if (blurIterations < 25)
-		blurIterations /= 4;
-	if (blurIterations > 80)
-		blurIterations = 80;
-	for (int i = 0; i < blurIterations; i++) {
-		mRenderTargets.swap();
-		mRenderTargets.current->use(mImmediateContext);
-		mRenderTargets.previous->draw(mImmediateContext);
-	}*/
+	// /*int blurIterations = (int)fabsf(mQuadPosX.velocity) / 20;
+	// if (blurIterations < 25)
+	// 	blurIterations /= 4;
+	// if (blurIterations > 80)
+	// 	blurIterations = 80;
+	// for (int i = 0; i < blurIterations; i++) {
+	// 	mRenderTargets.swap();
+	// 	mRenderTargets.current->use(mImmediateContext);
+	// 	mRenderTargets.previous->draw(mImmediateContext);
+	// }*/
 
-	/*renderTargetCI.pixelShader = mPrintPS;
-	renderTargetCI.uniformBuffer = nullptr;
-	renderTargetCI.alphaBlending = true;
-	mRenderTargets.current->recreatePipelineState(renderTargetCI);
-	mRenderTargets.previous->recreatePipelineState(renderTargetCI);*/
+	// /*renderTargetCI.pixelShader = mPrintPS;
+	// renderTargetCI.uniformBuffer = nullptr;
+	// renderTargetCI.alphaBlending = true;
+	// mRenderTargets.current->recreatePipelineState(renderTargetCI);
+	// mRenderTargets.previous->recreatePipelineState(renderTargetCI);*/
 
-	// mRenderTargets.current->draw(mImmediateContext);
+	// // mRenderTargets.current->draw(mImmediateContext);
 
 	mSolidFillRenderer->draw(mImmediateContext,
 		glm::translate(mViewProjection, glm::vec3(mSquirclePos - mSquircleFill.offset, 0.0f)), mSquircleFill, glm::vec3(1.0f), 1.0f);
@@ -273,20 +286,27 @@ void App::resize(int width, int height)
 {
 	mSwapChain->Resize(width, height);
 
-	RenderTargetCreateInfo renderTargetCI;
-	renderTargetCI.device = mDevice;
-	renderTargetCI.swapChain = mSwapChain;
-	renderTargetCI.width = width;
-	renderTargetCI.height = height;
-	mRenderTargets.current->recreateTextures(renderTargetCI);
-	mRenderTargets.previous->recreateTextures(renderTargetCI);
+	// RenderTargetCreateInfo renderTargetCI;
+	// renderTargetCI.device = mDevice;
+	// renderTargetCI.swapChain = mSwapChain;
+	// renderTargetCI.width = width;
+	// renderTargetCI.height = height;
+	// mRenderTargets.current->recreateTextures(renderTargetCI);
+	// mRenderTargets.previous->recreateTextures(renderTargetCI);
 }
 
 void App::initializeDiligentEngine()
 {
 	Diligent::SwapChainDesc SCDesc;
+	SDL_SysWMinfo wmi;
+	SDL_VERSION(&wmi.version);
+	if (!SDL_GetWindowWMInfo(mWindow, &wmi)) {
+		std::cerr << "Could not get window manager information" << std::endl;
+		exit(-1);
+	}
 	#ifdef PLATFORM_MACOS
-	Diligent::MacOSNativeWindow window { glfwGetCocoaWindow(mWindow) };
+	Diligent::MacOSNativeWindow window;
+	window.pNSView = setupLayersAndGetView(wmi.info.cocoa.window);
 
 	// We need at least 3 buffers in Metal to avoid massive
     // performance degradation in full screen mode.
@@ -307,7 +327,7 @@ void App::initializeDiligentEngine()
 				if (!mDevice)
 				{
 					std::cerr << "Unable to initialize Diligent Engine in Vulkan mode. The API may not be available, "
-										"or required features may not be supported by this GPU/driver/OS version." << std::endl;
+							"or required features may not be supported by this GPU/driver/OS version." << std::endl;
 					exit(-1);
 				}
 				pFactoryVk->CreateSwapChainVk(mDevice, mImmediateContext, SCDesc, window, &mSwapChain);
@@ -465,39 +485,39 @@ void App::initializeResources()
 	// Render target creation
 
 
-	{
-		ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
-		ShaderCI.EntryPoint = "main";
-		ShaderCI.Desc.Name = "Render target pixel shader";
-		ShaderCI.Source = RenderTargetPSSource;
-		mDevice->CreateShader(ShaderCI, &mMotionBlurPS);
+	// {
+	// 	ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
+	// 	ShaderCI.EntryPoint = "main";
+	// 	ShaderCI.Desc.Name = "Render target pixel shader";
+	// 	ShaderCI.Source = RenderTargetPSSource;
+	// 	mDevice->CreateShader(ShaderCI, &mMotionBlurPS);
 
-		ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
-		ShaderCI.EntryPoint = "main";
-		ShaderCI.Desc.Name = "Render target pixel shader";
-		ShaderCI.Source = PrintPSSource;
-		mDevice->CreateShader(ShaderCI, &mPrintPS);
+	// 	ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
+	// 	ShaderCI.EntryPoint = "main";
+	// 	ShaderCI.Desc.Name = "Render target pixel shader";
+	// 	ShaderCI.Source = PrintPSSource;
+	// 	mDevice->CreateShader(ShaderCI, &mPrintPS);
 
-		Diligent::BufferDesc CBDesc;
-		CBDesc.Name = "RTPS constants CB";
-		CBDesc.Size = sizeof(MotionBlurConstants);
-		CBDesc.Usage = Diligent::USAGE_DYNAMIC;
-		CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
-		CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
-		mDevice->CreateBuffer(CBDesc, nullptr, &mMotionBlurConstants);
-	}
+	// 	Diligent::BufferDesc CBDesc;
+	// 	CBDesc.Name = "RTPS constants CB";
+	// 	CBDesc.Size = sizeof(MotionBlurConstants);
+	// 	CBDesc.Usage = Diligent::USAGE_DYNAMIC;
+	// 	CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
+	// 	CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
+	// 	mDevice->CreateBuffer(CBDesc, nullptr, &mMotionBlurConstants);
+	// }
 	
-	RenderTargetCreateInfo renderTargetCI;
-	renderTargetCI.device = mDevice;
-	renderTargetCI.swapChain = mSwapChain;
-	renderTargetCI.width = mWidth;
-	renderTargetCI.height = mHeight;
-	renderTargetCI.pixelShader = mPrintPS;
-	renderTargetCI.uniformBuffer = nullptr;
-	renderTargetCI.alphaBlending = true;
+	// RenderTargetCreateInfo renderTargetCI;
+	// renderTargetCI.device = mDevice;
+	// renderTargetCI.swapChain = mSwapChain;
+	// renderTargetCI.width = mWidth;
+	// renderTargetCI.height = mHeight;
+	// renderTargetCI.pixelShader = mPrintPS;
+	// renderTargetCI.uniformBuffer = nullptr;
+	// renderTargetCI.alphaBlending = true;
 
-	mRenderTargets.current = std::make_shared<RenderTarget>(renderTargetCI);
-	mRenderTargets.previous = std::make_shared<RenderTarget>(renderTargetCI);
+	// mRenderTargets.current = std::make_shared<RenderTarget>(renderTargetCI);
+	// mRenderTargets.previous = std::make_shared<RenderTarget>(renderTargetCI);
 
 	mSolidFillRenderer = std::make_shared<SolidFillRenderer>(SolidFillRenderer(mDevice, mSwapChain));
 
@@ -519,13 +539,21 @@ void App::initializeResources()
 void App::initializeFont() {
 	std::vector<std::shared_ptr<ui::FontAtlas>> atlases;
 
+	const static char* defaultFontAtlasPath = "assets/Roboto-Regular.png";
+	const static char* defaultFontPath = "assets/Roboto-Regular.fnt";
+
+	// Check if files exist
+	if(access(defaultFontAtlasPath, 0) != 0 || access(defaultFontPath, 0) != 0) {
+		std::cerr << "Could not load font files" << std::endl;
+		exit(-1);
+	}
+
 	int width, height, numChannels;
-	const char* filename = "assets/Roboto-Regular.png";
-	unsigned char* data = stbi_load(filename, &width, &height, &numChannels, 0);
+	unsigned char* data = stbi_load(defaultFontAtlasPath, &width, &height, &numChannels, 0);
 	atlases.push_back(
 		std::make_shared<ui::FontAtlas>(
 			ui::FontAtlas(
-				mDevice, mSwapChain, filename, data, width, height, numChannels
+				mDevice, mSwapChain, defaultFontAtlasPath, data, width, height, numChannels
 			)
 		));
 	stbi_image_free(data);
@@ -537,5 +565,13 @@ void App::initializeFont() {
 
 float App::getTime()
 {
-	return (float)glfwGetTime();
+	return (float)SDL_GetTicks() / 1000.0f;
+}
+
+int App::getActualWidth() {
+	return (int)((float)mWidth * mDotsPerPixel);
+}
+
+int App::getActualHeight() {
+	return (int)((float)mHeight * mDotsPerPixel);
 }
