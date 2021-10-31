@@ -31,7 +31,7 @@ App::App():
 
 int App::run()
 {
-	if(SDL_Init( SDL_INIT_VIDEO ) != 0) {
+	if(SDL_Init(SDL_INIT_VIDEO) != 0) {
     	std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl;
  		exit(-1);
 	}
@@ -43,10 +43,14 @@ int App::run()
 		SDL_WINDOWPOS_UNDEFINED,
 		mWidth,
 		mHeight,
-		SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+		SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI
+		#ifdef PLATFORM_MACOS
+		// | SDL_WINDOW_VULKAN
+		#endif
+		);
 	
 	if(mWindow == nullptr) {
-		std::cerr << "Failed to create window" << std::endl;
+		std::cerr << "Failed to create window: " << SDL_GetError() << std::endl;
 		exit(-1);
 	}
 

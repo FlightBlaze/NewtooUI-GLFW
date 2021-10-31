@@ -8,7 +8,7 @@ void* setupLayersAndGetView(void* window) {
     NSWindow* nswindow = (NSWindow*)window;
     id nsview = nswindow.contentView;
     CGSize viewScale = [nsview convertSizeToBacking: CGSizeMake(1.0, 1.0)];
-    // metalLayer.contentsScale = MIN(viewScale.width, viewScale.height);
+    metalLayer.contentsScale = MIN(viewScale.width, viewScale.height);
     [nsview setLayer:metalLayer];
     [nsview setWantsLayer:YES];
     return nsview;
