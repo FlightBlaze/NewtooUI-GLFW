@@ -119,7 +119,7 @@ TextRenderer::TextRenderer(
 void TextRenderer::draw(
 	Diligent::RefCntAutoPtr<Diligent::IDeviceContext> context,
 	glm::mat4 modelViewProjection,
-	const std::string& text,
+	const std::wstring& text,
 	float sizePx,
 	float opacity)
 {

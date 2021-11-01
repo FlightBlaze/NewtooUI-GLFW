@@ -22,6 +22,7 @@ extern "C" {
 #include <glm/gtx/matrix_transform_2d.hpp>
 #include <stb_image.h>
 #include <unistd.h>
+#include <codecvt>
 
 App::App():
 	mQuadPhysicalProps(1.0f, 95.0f, 5.0f),
@@ -53,11 +54,6 @@ int App::run()
 		std::cerr << "Failed to create window: " << SDL_GetError() << std::endl;
 		exit(-1);
 	}
-
-	float ddpi, hdpi, vdpi;
-	SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi);
-	float inchPx = 96;
-	mDotsPerPixel = hdpi / inchPx;
 
 	initializeDiligentEngine();
 	initializeResources();
@@ -235,10 +231,12 @@ void App::draw()
 	mSolidFillRenderer->draw(mImmediateContext,
 		glm::translate(mViewProjection, glm::vec3(mSquirclePos - mSquircleFill.offset, 0.0f)), mSquircleFill, glm::vec3(1.0f), 1.0f);
 
+	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+
 	mTextRenderer->draw(mImmediateContext,
-		mTextModelViewProjection, "Hello world!", mTextSize, 1.0f);
+		mTextModelViewProjection, L"Здравствуй, мир!", mTextSize, 1.0f);
 	
-	std::string FPS = std::string("FPS: ") +std::to_string(mLastFPS);
+	std::wstring FPS = L"FPS: " + converter.from_bytes(std::to_string(mLastFPS).c_str());
 	mTextRenderer->draw(mImmediateContext,
 		glm::translate(mViewProjection, glm::vec3(glm::vec2(10.0f, 10.0f), 0.0f)), FPS, 16.0f, 1.0f);
 
@@ -570,12 +568,4 @@ void App::initializeFont() {
 float App::getTime()
 {
 	return (float)SDL_GetTicks() / 1000.0f;
-}
-
-int App::getActualWidth() {
-	return (int)((float)mWidth * mDotsPerPixel);
-}
-
-int App::getActualHeight() {
-	return (int)((float)mHeight * mDotsPerPixel);
 }

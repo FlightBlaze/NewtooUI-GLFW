@@ -53,11 +53,6 @@ private:
     SDL_Window* mWindow = nullptr;
     int mWidth = 0,
         mHeight = 0;
-    
-    float mDotsPerPixel = 0.0f;
-
-    int getActualWidth();
-    int getActualHeight();
 
     #ifdef PLATFORM_MACOS
     Diligent::RENDER_DEVICE_TYPE mDeviceType = Diligent::RENDER_DEVICE_TYPE_VULKAN;

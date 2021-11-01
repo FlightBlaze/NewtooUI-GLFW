@@ -15,7 +15,7 @@ public:
     void draw(
         Diligent::RefCntAutoPtr<Diligent::IDeviceContext> context,
         glm::mat4 modelViewProjection,
-        const std::string& text,
+        const std::wstring& text,
         float sizePx = 32.0f,
         float opacity = 1.0f);
 
