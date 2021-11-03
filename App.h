@@ -83,7 +83,7 @@ private:
     ui::Spring mQuadPosX;
     std::shared_ptr<ui::Font> mFont;
     std::shared_ptr<TextRenderer> mTextRenderer;
-    std::shared_ptr<SolidFillRenderer> mSolidFillRenderer;
+    std::shared_ptr<ShapeRenderer> mSolidFillRenderer;
 
     float mQuadTime = 0.0f;
     float mSecondTime = 0.0f;
@@ -91,7 +91,11 @@ private:
     int mFPS = 0;
 public:
     glm::vec2 mSquirclePos;
-    Fill mSquircleFill;
+    Shape mSquircleFill;
+    Shape mSquircleStroke;
+    
+    Shape mRayStroke;
+    bool isMouseDown = false;
 };
 
 static const char* VSSource = R"(

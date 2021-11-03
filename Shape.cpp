@@ -2,7 +2,7 @@
 #include "Graphics/GraphicsTools/interface/CommonlyUsedStates.h"
 #include "Graphics/GraphicsTools/interface/MapHelper.hpp"
 #include <glm/gtx/transform.hpp>
-#include <MathExtras.h>
+#include <Tube.h>
 #include <cmath>
 
 #include <App.h>
@@ -52,15 +52,47 @@ std::vector<glm::vec2> GenerateUV(MinMax2 bounds, std::vector<glm::vec3> verts) 
 	return UV;
 }
 
-Fill CreateFill(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+void PopulateShapeBuffers(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                          std::vector<ShapeVertex>& vertices,
+                          std::vector<int> indices, Shape& shape) {
+    Diligent::BufferDesc VertBuffDesc;
+    VertBuffDesc.Name = "Shape vertex buffer";
+    VertBuffDesc.Usage = Diligent::USAGE_IMMUTABLE;
+    VertBuffDesc.BindFlags = Diligent::BIND_VERTEX_BUFFER;
+    VertBuffDesc.Size = vertices.size() * sizeof(ShapeVertex);
+    Diligent::BufferData VBData;
+    VBData.pData = vertices.data();
+    VBData.DataSize = vertices.size() * sizeof(ShapeVertex);
+    renderDevice->CreateBuffer(VertBuffDesc, &VBData, &shape.vertexBuffer);
+
+    Diligent::BufferDesc IndBuffDesc;
+    IndBuffDesc.Name = "Shape index buffer";
+    IndBuffDesc.Usage = Diligent::USAGE_IMMUTABLE;
+    IndBuffDesc.BindFlags = Diligent::BIND_INDEX_BUFFER;
+    IndBuffDesc.Size = indices.size() * sizeof(int);
+    Diligent::BufferData IBData;
+    IBData.pData = indices.data();
+    IBData.DataSize = indices.size() * sizeof(int);
+    renderDevice->CreateBuffer(IndBuffDesc, &IBData, &shape.indexBuffer);
+
+    shape.vertices = vertices;
+    shape.indices = indices;
+    shape.numIndices = (int)indices.size();
+}
+
+void PopulateShapeDimensions(MinMax2 bounds, Shape& shape) {
+    shape.width = bounds.maxX - bounds.minX;
+    shape.height = bounds.maxY - bounds.minY;
+    shape.offset = glm::vec2(-bounds.minX, -bounds.minY);
+    shape.bounds = bounds;
+}
+
+Shape CreateFill(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
 	tube::Path path, bool isConvex)
 {
-	Fill fill;
+	Shape fill;
 	tube::Shape shape = path.toShape();
 	MinMax2 bounds = CalculateBoundingBox2D(shape.verts);
-	fill.width = bounds.maxX - bounds.minX;
-	fill.height = bounds.maxY - bounds.minY;
-	fill.offset = glm::vec2(-bounds.minX, -bounds.minY);
 	std::vector<int> indices = CreateIndicesConvex(shape.verts.size());
 	std::vector<glm::vec2> UV = GenerateUV(bounds, shape.verts);
 	std::vector<ShapeVertex> vertices;
@@ -69,35 +101,28 @@ Fill CreateFill(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
 		vertices[i].position = shape.verts[i];
 		vertices[i].texCoord = UV[i];
 	}
-
-	Diligent::BufferDesc VertBuffDesc;
-	VertBuffDesc.Name = "Shape vertex buffer";
-	VertBuffDesc.Usage = Diligent::USAGE_IMMUTABLE;
-	VertBuffDesc.BindFlags = Diligent::BIND_VERTEX_BUFFER;
-	VertBuffDesc.Size = vertices.size() * sizeof(ShapeVertex);
-	Diligent::BufferData VBData;
-	VBData.pData = vertices.data();
-	VBData.DataSize = vertices.size() * sizeof(ShapeVertex);
-	renderDevice->CreateBuffer(VertBuffDesc, &VBData, &fill.vertexBuffer);
-
-	Diligent::BufferDesc IndBuffDesc;
-	IndBuffDesc.Name = "Shape index buffer";
-	IndBuffDesc.Usage = Diligent::USAGE_IMMUTABLE;
-	IndBuffDesc.BindFlags = Diligent::BIND_INDEX_BUFFER;
-	IndBuffDesc.Size = indices.size() * sizeof(int);
-	Diligent::BufferData IBData;
-	IBData.pData = indices.data();
-	IBData.DataSize = indices.size() * sizeof(int);
-	renderDevice->CreateBuffer(IndBuffDesc, &IBData, &fill.indexBuffer);
-
-	fill.vertices = vertices;
-	fill.indices = indices;
-	fill.bounds = bounds;
-	fill.numIndices = (int)indices.size();
+    PopulateShapeDimensions(bounds, fill);
+    PopulateShapeBuffers(renderDevice, vertices, indices, fill);
 	return fill;
 }
 
-SolidFillRenderer::SolidFillRenderer(
+Shape CreateStroke(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                   tube::Builder& builder)
+{
+    Shape stroke;
+    tube::Tube tube = builder.apply();
+    std::vector<ShapeVertex> vertices;
+    vertices.resize(tube.vertices.size());
+    for (int i = 0; i < vertices.size(); i++) {
+        vertices[i].position = tube.vertices[i];
+        vertices[i].texCoord = tube.texCoords[i];
+    }
+    PopulateShapeDimensions(CalculateBoundingBox2D(tube.vertices), stroke);
+    PopulateShapeBuffers(renderDevice, vertices, tube.indices, stroke);
+    return stroke;
+}
+
+ShapeRenderer::ShapeRenderer(
 	Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
 	Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain)
 {
@@ -145,12 +170,12 @@ SolidFillRenderer::SolidFillRenderer(
 		ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
 		ShaderCI.EntryPoint = "main";
 		ShaderCI.Desc.Name = "Solid fill pixel shader";
-		ShaderCI.Source = SolidFillPSSource;
+		ShaderCI.Source = ShapePSSource;
 		renderDevice->CreateShader(ShaderCI, &pPS);
 
 		Diligent::BufferDesc CBDesc;
 		CBDesc.Name = "PS constants CB";
-		CBDesc.Size = sizeof(SolidFillPSConstants);
+		CBDesc.Size = sizeof(ShapePSConstants);
 		CBDesc.Usage = Diligent::USAGE_DYNAMIC;
 		CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
 		CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
@@ -179,9 +204,9 @@ SolidFillRenderer::SolidFillRenderer(
 	mPSO->CreateShaderResourceBinding(&mSRB, true);
 }
 
-void SolidFillRenderer::draw(
+void ShapeRenderer::draw(
 	Diligent::RefCntAutoPtr<Diligent::IDeviceContext> context,
-	glm::mat4 modelViewProjection, Fill& shape, glm::vec3 color, float opacity)
+	glm::mat4 modelViewProjection, Shape& shape, glm::vec3 color, float opacity)
 {
 	{
 		Diligent::MapHelper<glm::mat4> CBConstants(context, mVSConstants,
@@ -189,9 +214,9 @@ void SolidFillRenderer::draw(
 		*CBConstants = glm::transpose(modelViewProjection);
 	}
 	{
-		Diligent::MapHelper<SolidFillPSConstants> CBConstants(context, mPSConstants,
+		Diligent::MapHelper<ShapePSConstants> CBConstants(context, mPSConstants,
 			Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-		SolidFillPSConstants constants;
+		ShapePSConstants constants;
 		constants.color = color;
 		constants.opacity = opacity;
 		*CBConstants = constants;
@@ -217,7 +242,7 @@ void SolidFillRenderer::draw(
 	context->DrawIndexed(DrawAttrs);
 }
 
-bool Fill::containsPoint(glm::vec2 point)
+bool Shape::containsPoint(glm::vec2 point)
 {
 	for (size_t i = 0; i < this->indices.size(); i += 3) {
 		glm::vec2 a = glm::vec2(this->vertices[this->indices[i + 0LL]].position);
@@ -227,4 +252,18 @@ bool Fill::containsPoint(glm::vec2 point)
 			return true;
 	}
 	return false;
+}
+
+float Shape::intersectsRay(glm::vec2 rayOrigin, glm::vec2 rayDirection) {
+    float distance = NoIntersection;
+    for (size_t i = 0; i < this->vertices.size() - 1; i++) {
+        glm::vec2 lineStart = this->vertices[i].position;
+        glm::vec2 lineEnd = this->vertices[i + 1LL].position;
+        distance = fminf(distance, raySegmentIntersection(rayOrigin, rayDirection, lineStart, lineEnd));
+    }
+    // First and last vertices
+    distance = fminf(distance, raySegmentIntersection(rayOrigin, rayDirection,
+                                                      this->vertices[0].position,
+                                                      this->vertices.back().position));
+    return distance;
 }

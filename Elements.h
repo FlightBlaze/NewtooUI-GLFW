@@ -18,14 +18,15 @@ struct Point2D {
 
 class Element {
 public:
+    Element();
+    
 	std::weak_ptr<Element> parent;
 	std::vector<std::shared_ptr<Element>> children;
 
 	ui::SpringPhysicalProperties physicalProperties;
 	Spring2D position;
-	Spring2D size;
 
 	glm::mat4 matrix;
 
-	Point2D GetScreenPosition();
+	Point2D getScreenPosition();
 };

@@ -29,15 +29,15 @@ bool barycentricIsPointInTriangle(glm::vec2 v1, glm::vec2 v2, glm::vec2 v3, glm:
 	return 0 <= a && a <= 1 && 0 <= b && b <= 1 && 0 <= c && c <= 1;
 }
 
-//glm::vec2 perpendicularClockwise(glm::vec2 v)
-//{
-//	return glm::vec2(v.y, -v.x);
-//}
-//
-//glm::vec2 perpendicularCounterClockwise(glm::vec2 v)
-//{
-//	return glm::vec2(-v.y, v.x);
-//}
+glm::vec2 perpendicularClockwise(glm::vec2 v)
+{
+	return glm::vec2(v.y, -v.x);
+}
+
+glm::vec2 perpendicularCounterClockwise(glm::vec2 v)
+{
+	return glm::vec2(-v.y, v.x);
+}
 
 //float sameSide(glm::vec2 v1, glm::vec2 v2, glm::vec2 point)
 //{
@@ -51,6 +51,51 @@ bool isPointInTriange(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec2 point)
 	//bool side3 = sameSide(c, a, point) >= 0;
 	//return side1 && side2 && side3;
 	return barycentricIsPointInTriangle(a, b, c, point);
+}
+
+glm::vec2 rotateVec2(glm::vec2 v, float rad) {
+    return glm::vec2(v.x * sin(rad), v.y * cos(rad));
+}
+
+float raySegmentIntersection(glm::vec2 rayOrigin, glm::vec2 rayDirection,
+                             glm::vec2 lineStart, glm::vec2 lineEnd) {
+//    glm::vec2 v1 = rayOrigin - lineStart;
+//    glm::vec2 v2 = lineEnd - lineStart;
+//    glm::vec2 v3 = perpendicularCounterClockwise(rayDirection);
+//
+//    float dot = glm::dot(v2, v3);
+//    if (fabsf(dot) < 0.000001)
+//        return NoIntersection;
+//
+//    float t1 = 1.0f / dot;
+//    float t2 = glm::dot(v1, v3) / dot;
+//
+//    if (t1 >= 0.0 && (t2 >= 0.0 && t2 <= 1.0))
+//        return t1;
+//
+//    return NoIntersection;
+    
+    float radians = atan2f(rayDirection.x, rayDirection.y);
+    glm::vec2 p1 = rotateVec2(lineStart - rayOrigin, radians);
+    glm::vec2 p2 = rotateVec2(lineEnd - rayOrigin, radians);
+    
+    glm::vec2 top;
+    glm::vec2 bottom;
+    
+    if(p1.y < p2.y) {
+        top = p1;
+        bottom = p2;
+    } else {
+        top = p2;
+        bottom = p1;
+    }
+    
+    if(top.y <= 0 && bottom.y >= 0) {
+        float t = 1 - bottom.y / (fabsf(top.y) + fabsf(bottom.y));
+        return glm::mix(top, bottom, t).x; // lerp
+    }
+    
+    return NoIntersection;
 }
 
 // Convert matrix 3x3 to matrix 4x4

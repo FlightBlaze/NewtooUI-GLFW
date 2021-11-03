@@ -1,6 +1,7 @@
-﻿#include <App.h>
+#include <App.h>
 #include <Resource.h>
 #include <Path.h>
+#include <Tube.h>
 #include <iostream>
 #ifdef PLATFORM_MACOS
 extern "C" {
@@ -62,6 +63,10 @@ int App::run()
 
 	bool quit = false;
 	SDL_Event currentEvent;
+    
+    bool redrawRay = false;
+    int rayX = 0, rayY = 0;
+    
 	while(!quit) {
 		while(SDL_PollEvent(&currentEvent) != 0) {
 			switch(currentEvent.type) {
@@ -88,13 +93,55 @@ int App::run()
 							glm::vec2((float)x, (float)y) - mSquirclePos;
 						bool isInside = mSquircleFill.containsPoint(relativePoint);
 						std::cout << "Is inside squircle: " << isInside << std::endl;
-					}
+                        isMouseDown = true;
+                        redrawRay = true;
+                        rayX = x;
+                        rayY = y;
+                    }
 				}
 				break;
+            case SDL_MOUSEBUTTONUP:
+                if(currentEvent.button.button == SDL_BUTTON_LEFT) {
+                    isMouseDown = false;
+                }
+            case SDL_MOUSEMOTION:
+                if(isMouseDown) {
+                    redrawRay = true;
+                    rayX = currentEvent.motion.x;
+                    rayY = currentEvent.motion.y;
+                }
+                break;
 			default:
 				break;
 			}
 		}
+        
+        if(redrawRay) {
+            glm::vec2 rayOrigin = glm::vec2((float)rayX, (float)rayY);
+            glm::vec2 rayDir = glm::vec2(0.0f, 1.0f);
+            
+            glm::vec2 relativePoint = mSquircleFill.offset +
+                rayOrigin - mSquirclePos;
+            
+            float intersectionDistance = mSquircleFill.intersectsRay(relativePoint, rayDir);
+            float endY = mHeight;
+            if(intersectionDistance != NoIntersection) {
+                glm::vec2 intersectionPoint = relativePoint + rayDir * intersectionDistance -
+                    mSquircleFill.offset + mSquirclePos;
+                float absoluteIntersectionDistance = glm::distance(intersectionPoint, rayOrigin);
+                endY = intersectionPoint.y;
+            }
+            
+            tube::Path path;
+            path.points = {
+                tube::Point(glm::vec3(rayX, rayY, 0.0f)),
+                tube::Point(glm::vec3(rayX, endY, 0.0f))
+            };
+            tube::Builder builder = tube::Builder(path).withShape(tube::Shapes::circle(2.0f, 4));
+            
+            mRayStroke = CreateStroke(mDevice, builder);
+        }
+        
 		update();
 		draw();
 	}
@@ -230,16 +277,26 @@ void App::draw()
 
 	mSolidFillRenderer->draw(mImmediateContext,
 		glm::translate(mViewProjection, glm::vec3(mSquirclePos - mSquircleFill.offset, 0.0f)), mSquircleFill, glm::vec3(1.0f), 1.0f);
+    
+    mSolidFillRenderer->draw(mImmediateContext,
+        glm::translate(mViewProjection, glm::vec3(mSquirclePos - mSquircleFill.offset, 0.0f)), mSquircleStroke, glm::vec3(0.0f), 1.0f);
 
 	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
+    glm::vec3 textColor = glm::mix(glm::vec3(1.0, 0.1, 0.4), glm::vec3(0.2, 0.2, 0.8), sinf(getTime()) / 2.0f + 1.0f);
+    
 	mTextRenderer->draw(mImmediateContext,
-		mTextModelViewProjection, L"Здравствуй, мир!", mTextSize, 1.0f);
+		mTextModelViewProjection, L"Здравствуй, мир!", mTextSize, textColor);
 	
 	std::wstring FPS = L"FPS: " + converter.from_bytes(std::to_string(mLastFPS).c_str());
 	mTextRenderer->draw(mImmediateContext,
-		glm::translate(mViewProjection, glm::vec3(glm::vec2(10.0f, 10.0f), 0.0f)), FPS, 16.0f, 1.0f);
-
+		glm::translate(mViewProjection, glm::vec3(glm::vec2(10.0f, 10.0f), 0.0f)), FPS, 16.0f);
+    
+    if(isMouseDown) {
+        mSolidFillRenderer->draw(mImmediateContext,
+            glm::translate(mViewProjection, glm::vec3(0.0f)), mRayStroke, glm::vec3(1.0f, 0.0f, 0.0f), 0.75f);
+    }
+        
 	mSwapChain->Present();
 }
 
@@ -271,7 +328,7 @@ void App::update()
 	mRotation = sinf(getTime()) * 0.57f;
 
 	glm::mat4 view = glm::identity<glm::mat4>();
-	glm::mat4 projection = glm::ortho(0.0f, (float)mWidth, (float)mHeight, 0.0f); // glm::perspective(65.0f, (float)mWidth / (float)mHeight, 0.001f, 100.0f);
+	glm::mat4 projection = glm::ortho(0.0f, (float)mWidth, (float)mHeight, 0.0f, -1000.0f, 1000.0f); // glm::perspective(65.0f, (float)mWidth / (float)mHeight, 0.001f, 100.0f);
 	glm::mat4 model = glm::rotate(glm::translate(glm::vec3(mWidth / 2 + mQuadPosX.currentValue, mHeight - 80.0f, 0.0f)), mRotation, glm::vec3(0, 0, 1));
 
 	mViewProjection = projection * view;
@@ -521,7 +578,7 @@ void App::initializeResources()
 	// mRenderTargets.current = std::make_shared<RenderTarget>(renderTargetCI);
 	// mRenderTargets.previous = std::make_shared<RenderTarget>(renderTargetCI);
 
-	mSolidFillRenderer = std::make_shared<SolidFillRenderer>(SolidFillRenderer(mDevice, mSwapChain));
+	mSolidFillRenderer = std::make_shared<ShapeRenderer>(ShapeRenderer(mDevice, mSwapChain));
 
 	tube::Path path;
 	const static glm::vec2 size = glm::vec2(100.0f, 160.0f);
@@ -532,8 +589,13 @@ void App::initializeResources()
 		tube::Point(glm::vec3(size.x / 2.0f, size.y, 0.0f), glm::vec3(0.0f, size.y, 0.0f)),
 		tube::Point(glm::vec3(0.0f, size.y / 2.0f, 0.0f))
 	};
-
+    // path = path.toPoly().evenlyDistributed(60);
+    path.closed = true;
+    std::vector<tube::Path> dashed = path.toPoly().evenlyDistributed(4).dash(20, 20);
+    tube::Builder builder = tube::Builder(dashed).withShape(tube::Shapes::circle(1.0f, 4)); //tube::Builder(dashed).withShape(tube::Shapes::circle(3.0f, 4));
+    
 	mSquircleFill = CreateFill(mDevice, path, true);
+    mSquircleStroke = CreateStroke(mDevice, builder);
 
 	initializeFont();
 }

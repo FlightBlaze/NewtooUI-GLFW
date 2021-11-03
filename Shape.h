@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Diligent.h>
+#include <MathExtras.h>
 #include <glm/glm.hpp>
 #include <Path.h>
 
@@ -13,7 +14,7 @@ struct ShapeVertex {
     glm::vec2 texCoord;
 };
 
-class Fill {
+class Shape {
 public:
 	Diligent::RefCntAutoPtr<Diligent::IBuffer> vertexBuffer;
 	Diligent::RefCntAutoPtr<Diligent::IBuffer> indexBuffer;
@@ -26,20 +27,24 @@ public:
     MinMax2 bounds;
 
     bool containsPoint(glm::vec2 point);
+    float intersectsRay(glm::vec2 rayOrigin, glm::vec2 rayDirection);
 };
 
-Fill CreateFill(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+Shape CreateFill(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
     tube::Path path, bool isConvex);
 
-class SolidFillRenderer {
+Shape CreateStroke(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+    tube::Builder& builder);
+
+class ShapeRenderer {
 public:
-	SolidFillRenderer(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+	ShapeRenderer(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
 		Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain);
 
 	void draw(
 		Diligent::RefCntAutoPtr<Diligent::IDeviceContext> context,
 		glm::mat4 modelViewProjection,
-		Fill& shape, glm::vec3 color, float opacity);
+		Shape& shape, glm::vec3 color, float opacity);
 
 private:
 	Diligent::RefCntAutoPtr<Diligent::IBuffer> mVSConstants;
@@ -48,12 +53,12 @@ private:
 	Diligent::RefCntAutoPtr<Diligent::IShaderResourceBinding> mSRB;
 };
 
-struct SolidFillPSConstants {
+struct ShapePSConstants {
     glm::vec3 color;
     float opacity;
 };
 
-static const char* SolidFillPSSource = R"(
+static const char* ShapePSSource = R"(
 cbuffer Constants
 {
     float3 g_Color;

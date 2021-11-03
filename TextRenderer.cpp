@@ -121,6 +121,7 @@ void TextRenderer::draw(
 	glm::mat4 modelViewProjection,
 	const std::wstring& text,
 	float sizePx,
+    glm::vec3 color,
 	float opacity)
 {
 	static const float smallSizePx = 32.0f;
@@ -158,7 +159,7 @@ void TextRenderer::draw(
 			Diligent::MapHelper<GlyphPSConstants> CBConstants(context, mPSConstants,
 				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
 			GlyphPSConstants constants;
-			constants.color = glm::vec3(0.0f);
+			constants.color = color;
 			constants.opacity = opacity;
 			constants.distanceRange = (float)font->distanceRange + extraDistance;
 			constants.atlasSize = glm::vec2(font->atlasWidth, font->atlasHeight);
