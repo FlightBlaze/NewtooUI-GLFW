@@ -53,49 +53,53 @@ bool isPointInTriange(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec2 point)
 	return barycentricIsPointInTriangle(a, b, c, point);
 }
 
+float crossProduct2D(glm::vec2 a, glm::vec2 b) {
+    return a.x * b.y - a.y * b.x;
+}
+
 glm::vec2 rotateVec2(glm::vec2 v, float rad) {
     return glm::vec2(v.x * sin(rad), v.y * cos(rad));
 }
 
 float raySegmentIntersection(glm::vec2 rayOrigin, glm::vec2 rayDirection,
                              glm::vec2 lineStart, glm::vec2 lineEnd) {
-//    glm::vec2 v1 = rayOrigin - lineStart;
-//    glm::vec2 v2 = lineEnd - lineStart;
-//    glm::vec2 v3 = perpendicularCounterClockwise(rayDirection);
+    glm::vec2 v1 = rayOrigin - lineStart;
+    glm::vec2 v2 = lineEnd - lineStart;
+    glm::vec2 v3 = perpendicularCounterClockwise(rayDirection);
+
+    float dot = glm::dot(v2, v3);
+    if (fabsf(dot) < 0.000001)
+        return NoIntersection;
+
+    float t1 = crossProduct2D(v2, v1) / dot;
+    float t2 = glm::dot(v1, v3) / dot;
+
+    if (t1 >= 0.0 && (t2 >= 0.0 && t2 <= 1.0))
+        return t1;
+
+    return NoIntersection;
+    
+//    float radians = atan2f(rayDirection.y, rayDirection.x);
+//    glm::vec2 p1 = rotateVec2(lineStart - rayOrigin, radians);
+//    glm::vec2 p2 = rotateVec2(lineEnd - rayOrigin, radians);
 //
-//    float dot = glm::dot(v2, v3);
-//    if (fabsf(dot) < 0.000001)
-//        return NoIntersection;
+//    glm::vec2 top;
+//    glm::vec2 bottom;
 //
-//    float t1 = 1.0f / dot;
-//    float t2 = glm::dot(v1, v3) / dot;
+//    if(p1.y < p2.y) {
+//        top = p1;
+//        bottom = p2;
+//    } else {
+//        top = p2;
+//        bottom = p1;
+//    }
 //
-//    if (t1 >= 0.0 && (t2 >= 0.0 && t2 <= 1.0))
-//        return t1;
+//    if(top.y <= 0 && bottom.y >= 0) {
+//        float t = 1 - bottom.y / (fabsf(top.y) + fabsf(bottom.y));
+//        return glm::mix(top, bottom, t).x; // lerp
+//    }
 //
 //    return NoIntersection;
-    
-    float radians = atan2f(rayDirection.x, rayDirection.y);
-    glm::vec2 p1 = rotateVec2(lineStart - rayOrigin, radians);
-    glm::vec2 p2 = rotateVec2(lineEnd - rayOrigin, radians);
-    
-    glm::vec2 top;
-    glm::vec2 bottom;
-    
-    if(p1.y < p2.y) {
-        top = p1;
-        bottom = p2;
-    } else {
-        top = p2;
-        bottom = p1;
-    }
-    
-    if(top.y <= 0 && bottom.y >= 0) {
-        float t = 1 - bottom.y / (fabsf(top.y) + fabsf(bottom.y));
-        return glm::mix(top, bottom, t).x; // lerp
-    }
-    
-    return NoIntersection;
 }
 
 // Convert matrix 3x3 to matrix 4x4

@@ -296,7 +296,31 @@ void App::draw()
         mSolidFillRenderer->draw(mImmediateContext,
             glm::translate(mViewProjection, glm::vec3(0.0f)), mRayStroke, glm::vec3(1.0f, 0.0f, 0.0f), 0.75f);
     }
-        
+    
+//    tube::Path path;
+//    path.points = {
+//        tube::Point(glm::vec3(500.0f, 100.0f, 0.0f), glm::vec3(550.0f, 60.0f, 0.0f)),
+//        tube::Point(glm::vec3(600.0f, 100.0f, 0.0f))
+//    };
+//    tube::TwoPathes twoPathes = path.divide(0.5);
+//
+//    tube::Builder path1Builder = tube::Builder(twoPathes.first)
+//                                .withRoundedCaps(2.0f)
+//                                .withShape(tube::Shapes::circle(2.0f, 4));
+//
+//    tube::Builder path2Builder = tube::Builder(twoPathes.second)
+//                                .withRoundedCaps(2.0f)
+//                                .withShape(tube::Shapes::circle(2.0f, 4));
+//
+//    Shape stroke1 = CreateStroke(mDevice, path1Builder);
+//    Shape stroke2 = CreateStroke(mDevice, path2Builder);
+//
+//    mSolidFillRenderer->draw(mImmediateContext,
+//        glm::translate(mViewProjection, glm::vec3(0.0f)), stroke1, glm::vec3(1.0f, 0.1f, 0.1f), 1.0f);
+//
+//    mSolidFillRenderer->draw(mImmediateContext,
+//        glm::translate(mViewProjection, glm::vec3(0.0f)), stroke2, glm::vec3(0.0f), 0.5f);
+    
 	mSwapChain->Present();
 }
 
@@ -591,8 +615,12 @@ void App::initializeResources()
 	};
     // path = path.toPoly().evenlyDistributed(60);
     path.closed = true;
-    std::vector<tube::Path> dashed = path.toPoly().evenlyDistributed(4).dash(20, 20);
-    tube::Builder builder = tube::Builder(dashed).withShape(tube::Shapes::circle(1.0f, 4)); //tube::Builder(dashed).withShape(tube::Shapes::circle(3.0f, 4));
+    tube::Builder builder = tube::Builder(path)
+        .toPoly()
+        .evenlyDistributed(4)
+        .dash(10, 10)
+        .withRoundedCaps(2.0f)
+        .withShape(tube::Shapes::circle(2.0f, 4));
     
 	mSquircleFill = CreateFill(mDevice, path, true);
     mSquircleStroke = CreateStroke(mDevice, builder);
