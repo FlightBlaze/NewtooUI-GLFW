@@ -152,34 +152,8 @@ int App::run()
 
 void App::draw()
 {
-	/*MotionBlurConstants motionBlur;
-	motionBlur.direction = glm::vec2(1.0f, 0.0f);
-	motionBlur.resolution = glm::vec2(mWidth, mHeight);
-
-	RenderTargetCreateInfo renderTargetCI;
-	renderTargetCI.device = mDevice;
-	renderTargetCI.swapChain = mSwapChain;
-	renderTargetCI.pixelShader = mMotionBlurPS;
-	renderTargetCI.uniformBuffer = mMotionBlurConstants;
-	renderTargetCI.alphaBlending = false;
-	mRenderTargets.current->recreatePipelineState(renderTargetCI);
-	mRenderTargets.previous->recreatePipelineState(renderTargetCI);
-	{
-		Diligent::MapHelper<MotionBlurConstants> CBConstants(mImmediateContext, mRenderTargets.current->uniformBuffer,
-			Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-		*CBConstants = motionBlur;
-	}
-	{
-		Diligent::MapHelper<MotionBlurConstants> CBConstants(mImmediateContext, mRenderTargets.previous->uniformBuffer,
-			Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-		*CBConstants = motionBlur;
-	}*/
-
 	const float ClearColor[] = { 0.5f,  0.5f,  0.5f, 1.0f };
 	const float Transparent[] = { 0.0f,  0.0f,  0.0f, 0.0f };
-
-	// mRenderTargets.current->use(mImmediateContext);
-	// mRenderTargets.current->clear(mImmediateContext, Transparent);
 
 	auto* pRTV = mSwapChain->GetCurrentBackBufferRTV();
 	auto* pDSV = mSwapChain->GetDepthBufferDSV();
@@ -191,111 +165,94 @@ void App::draw()
 	mImmediateContext->ClearDepthStencil(pDSV, Diligent::CLEAR_DEPTH_FLAG, 1.f, 0,
 		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-	Diligent::Uint64   offset = 0;
-	Diligent::IBuffer* pBuffs[] = { mQuadVertexBuffer };
-	mImmediateContext->SetVertexBuffers(0, 1, pBuffs, &offset,
-		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-		Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
-	mImmediateContext->SetIndexBuffer(mQuadIndexBuffer, 0,
-		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-	mImmediateContext->SetPipelineState(mPSO);
-
-	mImmediateContext->CommitShaderResources(mSRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-	Diligent::DrawIndexedAttribs DrawAttrs;
-	DrawAttrs.IndexType = Diligent::VT_UINT32;
-	DrawAttrs.NumIndices = _countof(QuadIndices);
-	DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
-
-	float speed = fabsf(mQuadPosX.velocity);
-	std::vector<float>* kernel = nullptr;
-	if (speed > 110)
-		kernel = &GaussianKernel5x1;
-	if (speed > 190)
-		kernel = &GaussianKernel9x1;
-	if (speed > 250)
-		kernel = &GaussianKernel15x1;
-	if (speed > 380)
-		kernel = &GaussianKernel31x1;
-	if (kernel != nullptr) {
-		glm::vec2 blurDirection = glm::vec2(1.0f, 0.0f);
-		int kernelSize = (int)kernel->size();
-		int kernelCenter = kernelSize / 2;
-		for (int i = 0; i < kernelSize; i++) {
-			float offset = (float)(i - kernelCenter);
-			float stepPx = 1.0f;
-			glm::vec2 resolution = glm::vec2(mWidth, mHeight);
-			glm::vec3 offsetInDirection = glm::vec3(glm::vec2(blurDirection * offset * stepPx) / resolution, 0.0f);
-			glm::mat4 MVP = glm::translate(offsetInDirection) * mModelViewProjection;
-			// Write model view projection matrix to uniform
-			{
-				Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
-					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-				*CBConstants = glm::transpose(MVP);
-			}
-			{
-				Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
-					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-				*CBConstants = kernel->at(i);
-			}
-			mImmediateContext->DrawIndexed(DrawAttrs);
-		}
-	}
-	else {
-		{
-			Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
-				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-			*CBConstants = glm::transpose(mModelViewProjection);
-		}
-		{
-			Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
-				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-			*CBConstants = 1.0f; // opacity
-		}
-		mImmediateContext->DrawIndexed(DrawAttrs);
-	}
-
-	// /*int blurIterations = (int)fabsf(mQuadPosX.velocity) / 20;
-	// if (blurIterations < 25)
-	// 	blurIterations /= 4;
-	// if (blurIterations > 80)
-	// 	blurIterations = 80;
-	// for (int i = 0; i < blurIterations; i++) {
-	// 	mRenderTargets.swap();
-	// 	mRenderTargets.current->use(mImmediateContext);
-	// 	mRenderTargets.previous->draw(mImmediateContext);
-	// }*/
-
-	// /*renderTargetCI.pixelShader = mPrintPS;
-	// renderTargetCI.uniformBuffer = nullptr;
-	// renderTargetCI.alphaBlending = true;
-	// mRenderTargets.current->recreatePipelineState(renderTargetCI);
-	// mRenderTargets.previous->recreatePipelineState(renderTargetCI);*/
-
-	// // mRenderTargets.current->draw(mImmediateContext);
-
-	mSolidFillRenderer->draw(mImmediateContext,
-		glm::translate(mViewProjection, glm::vec3(mSquirclePos - mSquircleFill.offset, 0.0f)), mSquircleFill, glm::vec3(1.0f), 1.0f);
+//	Diligent::Uint64   offset = 0;
+//	Diligent::IBuffer* pBuffs[] = { mQuadVertexBuffer };
+//	mImmediateContext->SetVertexBuffers(0, 1, pBuffs, &offset,
+//		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+//		Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
+//	mImmediateContext->SetIndexBuffer(mQuadIndexBuffer, 0,
+//		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+//
+//	mImmediateContext->SetPipelineState(mPSO);
+//
+//	mImmediateContext->CommitShaderResources(mSRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+//
+//	Diligent::DrawIndexedAttribs DrawAttrs;
+//	DrawAttrs.IndexType = Diligent::VT_UINT32;
+//	DrawAttrs.NumIndices = _countof(QuadIndices);
+//	DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
+//
+//	float speed = fabsf(mQuadPosX.velocity);
+//	std::vector<float>* kernel = nullptr;
+//	if (speed > 110)
+//		kernel = &GaussianKernel5x1;
+//	if (speed > 190)
+//		kernel = &GaussianKernel9x1;
+//	if (speed > 250)
+//		kernel = &GaussianKernel15x1;
+//	if (speed > 380)
+//		kernel = &GaussianKernel31x1;
+//	if (kernel != nullptr) {
+//		glm::vec2 blurDirection = glm::vec2(1.0f, 0.0f);
+//		int kernelSize = (int)kernel->size();
+//		int kernelCenter = kernelSize / 2;
+//		for (int i = 0; i < kernelSize; i++) {
+//			float offset = (float)(i - kernelCenter);
+//			float stepPx = 1.0f;
+//			glm::vec2 resolution = glm::vec2(mWidth, mHeight);
+//			glm::vec3 offsetInDirection = glm::vec3(glm::vec2(blurDirection * offset * stepPx) / resolution, 0.0f);
+//			glm::mat4 MVP = glm::translate(offsetInDirection) * mModelViewProjection;
+//			// Write model view projection matrix to uniform
+//			{
+//				Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
+//					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+//				*CBConstants = glm::transpose(MVP);
+//			}
+//			{
+//				Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
+//					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+//				*CBConstants = kernel->at(i);
+//			}
+//			mImmediateContext->DrawIndexed(DrawAttrs);
+//		}
+//	}
+//	else {
+//		{
+//			Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
+//				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+//			*CBConstants = glm::transpose(mModelViewProjection);
+//		}
+//		{
+//			Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
+//				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+//			*CBConstants = 1.0f; // opacity
+//		}
+//		mImmediateContext->DrawIndexed(DrawAttrs);
+//	}
     
-    mSolidFillRenderer->draw(mImmediateContext,
-        glm::translate(mViewProjection, glm::vec3(mSquirclePos - mSquircleFill.offset, 0.0f)), mSquircleStroke, glm::vec3(0.0f), 1.0f);
-
+    
+    
+//	mSolidFillRenderer->draw(mImmediateContext,
+//		glm::translate(mViewProjection, glm::vec3(mSquirclePos - mSquircleFill.offset, 0.0f)), mSquircleFill, glm::vec3(1.0f), 1.0f);
+//
+//    mSolidFillRenderer->draw(mImmediateContext,
+//        glm::translate(mViewProjection, glm::vec3(mSquirclePos - mSquircleFill.offset, 0.0f)), mSquircleStroke, glm::vec3(0.0f), 1.0f);
+//
 	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
-    glm::vec3 textColor = glm::mix(glm::vec3(1.0, 0.1, 0.4), glm::vec3(0.2, 0.2, 0.8), sinf(getTime()) / 2.0f + 1.0f);
-    
-	mTextRenderer->draw(mImmediateContext,
-		mTextModelViewProjection, L"Здравствуй, мир!", mTextSize, textColor);
+//    glm::vec3 textColor = glm::mix(glm::vec3(1.0, 0.1, 0.4), glm::vec3(0.2, 0.2, 0.8), sinf(getTime()) / 2.0f + 1.0f);
+//
+//	mTextRenderer->draw(mImmediateContext,
+//		mTextModelViewProjection, L"Здравствуй, мир!", mTextSize, textColor);
 	
 	std::wstring FPS = L"FPS: " + converter.from_bytes(std::to_string(mLastFPS).c_str());
 	mTextRenderer->draw(mImmediateContext,
 		glm::translate(mViewProjection, glm::vec3(glm::vec2(10.0f, 10.0f), 0.0f)), FPS, 16.0f);
     
-    if(isMouseDown) {
-        mSolidFillRenderer->draw(mImmediateContext,
-            glm::translate(mViewProjection, glm::vec3(0.0f)), mRayStroke, glm::vec3(1.0f, 0.0f, 0.0f), 0.75f);
-    }
+//    if(isMouseDown) {
+//        mSolidFillRenderer->draw(mImmediateContext,
+//            glm::translate(mViewProjection, glm::vec3(0.0f)), mRayStroke, glm::vec3(1.0f, 0.0f, 0.0f), 0.75f);
+//    }
     
 //    tube::Path path;
 //    path.points = {
@@ -320,6 +277,11 @@ void App::draw()
 //
 //    mSolidFillRenderer->draw(mImmediateContext,
 //        glm::translate(mViewProjection, glm::vec3(0.0f)), stroke2, glm::vec3(0.0f), 0.5f);
+    
+    ctx.currentPass = ContextPass::LAYOUT;
+    doUI();
+    ctx.currentPass = ContextPass::DRAW;
+    doUI();
     
 	mSwapChain->Present();
 }
@@ -602,7 +564,7 @@ void App::initializeResources()
 	// mRenderTargets.current = std::make_shared<RenderTarget>(renderTargetCI);
 	// mRenderTargets.previous = std::make_shared<RenderTarget>(renderTargetCI);
 
-	mSolidFillRenderer = std::make_shared<ShapeRenderer>(ShapeRenderer(mDevice, mSwapChain));
+	mShapeRenderer = std::make_shared<ShapeRenderer>(ShapeRenderer(mDevice, mSwapChain));
 
 	tube::Path path;
 	const static glm::vec2 size = glm::vec2(100.0f, 160.0f);
@@ -622,10 +584,17 @@ void App::initializeResources()
         .withRoundedCaps(2.0f)
         .withShape(tube::Shapes::circle(2.0f, 4));
     
+    mSquircleShape = std::make_shared<Shape>(CreateFill(mDevice, path, true));
 	mSquircleFill = CreateFill(mDevice, path, true);
     mSquircleStroke = CreateStroke(mDevice, builder);
-
+    
 	initializeFont();
+    
+    ctx.textRenderer = mTextRenderer;
+    ctx.shapeRenderer = mShapeRenderer;
+    ctx.context = mImmediateContext;
+    ctx.renderDevice = mDevice;
+    ctx.swapChain = mSwapChain;
 }
 
 void App::initializeFont() {
@@ -658,4 +627,17 @@ void App::initializeFont() {
 float App::getTime()
 {
 	return (float)SDL_GetTicks() / 1000.0f;
+}
+
+void App::doUI() {
+    beginAffine(ctx, glm::translate(mViewProjection, glm::vec3(100.0f, 100.0f, 0.0f)));
+    {
+        beginBoundary(ctx, mSquircleShape);
+        {
+            elements::Text(ctx, L"Hello world!", ctx.textRenderer,
+                           24.0f, Color(0.0f, 0.0f, 0.0f, 1.0f));
+        }
+        endBoundary(ctx);
+    }
+    endAffine(ctx);
 }

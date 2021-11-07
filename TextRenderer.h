@@ -19,6 +19,10 @@ public:
         float sizePx = 32.0f,
         glm::vec3 color = glm::vec3(0.0f),
         float opacity = 1.0f);
+    
+    float measureWidth(const std::wstring& text, float sizePx = 32.0f);
+    float measureHeight(float sizePx = 32.0f);
+    float getScale(float sizePx);
 
 protected:
     Diligent::RefCntAutoPtr<Diligent::IPipelineState> mPSO;

@@ -116,6 +116,10 @@ TextRenderer::TextRenderer(
 	renderDevice->CreateBuffer(IndBuffDesc, &IBData, &mQuadIndexBuffer);
 }
 
+float TextRenderer::getScale(float sizePx) {
+    return sizePx / (float)font->lineHeight;
+}
+
 void TextRenderer::draw(
 	Diligent::RefCntAutoPtr<Diligent::IDeviceContext> context,
 	glm::mat4 modelViewProjection,
@@ -128,7 +132,7 @@ void TextRenderer::draw(
 	static const float maxExtraDist = 0.0f; // 5.0f
 	float extraDistance = fmaxf((smallSizePx - sizePx) / sizePx * maxExtraDist, 0);
 
-	float scale = sizePx / (float)font->lineHeight;
+	float scale = getScale(sizePx);
 	glm::vec2 pos = glm::vec2(0.0f, (float)font->baseline * scale);
 	for (int i = 0; i < text.size(); i++)
 	{
@@ -188,4 +192,23 @@ void TextRenderer::draw(
 
 		pos.x += character.xAdvance * scale;
 	}
+}
+
+float TextRenderer::measureWidth(const std::wstring& text, float sizePx) {
+    float width = 0.0f;
+    float scale = getScale(sizePx);
+    for (int i = 0; i < text.size(); i++)
+    {
+        int symbol = text[i];
+        if (symbol == '\n')
+            break;
+        
+        ui::FontCharacter& character = this->font->characters[symbol];
+        width += character.xAdvance * scale;
+    }
+    return width;
+}
+
+float TextRenderer::measureHeight(float sizePx) {
+    return this->font->lineHeight * getScale(sizePx);
 }

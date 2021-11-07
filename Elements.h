@@ -2,10 +2,8 @@
 
 #include <Spring.hh>
 #include <Font.hh>
-#include <Shape.h>
-#include <memory>
-#include <vector>
-#include <glm/glm.hpp>
+#include <Context.h>
+#include <string>
 
 struct Spring2D {
 	Spring2D(ui::SpringPhysicalProperties& props);
@@ -16,17 +14,15 @@ struct Point2D {
 	float x, y;
 };
 
-class Element {
-public:
-    Element();
-    
-	std::weak_ptr<Element> parent;
-	std::vector<std::shared_ptr<Element>> children;
-
-	ui::SpringPhysicalProperties physicalProperties;
-	Spring2D position;
-
-	glm::mat4 matrix;
-
-	Point2D getScreenPosition();
+struct Color {
+    Color(float r, float g, float b, float a);
+    float r, g, b, a;
 };
+
+namespace elements {
+    
+void Text(Context& ctx, std::wstring text, std::shared_ptr<TextRenderer> textRenderer, float sizePx, Color color);
+void Word(Context& ctx, std::wstring word, std::shared_ptr<TextRenderer> textRenderer, float sizePx, Color color);
+void Whitespace(Context& ctx, std::shared_ptr<TextRenderer> textRenderer, float sizePx);
+
+}

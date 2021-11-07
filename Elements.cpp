@@ -1,32 +1,84 @@
 #include <Elements.h>
+#include <glm/gtx/transform.hpp>
 
-Element::Element():
-    physicalProperties(10, 5, 2),
-    position(physicalProperties),
-    matrix(1.0f)
+Color::Color(float r, float g, float b, float a):
+    r(r), g(g), b(b), a(a)
 {
+}
+
+// https://stackoverflow.com/a/5888676/5468048
+std::vector<std::wstring> splitWString(const std::wstring &text, wchar_t delimiter)
+{
+    std::vector<std::wstring> words;
+    size_t pos = text.find(delimiter);
+    size_t initialPos = 0;
+
+    while(pos != std::string::npos) {
+        words.push_back(text.substr(initialPos, pos - initialPos));
+        initialPos = pos + 1;
+        pos = text.find(delimiter, initialPos);
+    }
     
+    words.push_back(text.substr(initialPos, std::min(pos, text.size()) - initialPos + 1));
+    return words;
 }
 
-Spring2D::Spring2D(ui::SpringPhysicalProperties& props)
-	: x(0.0f, 0.0f, props), y(0.0f, 0.0f, props)
-{
+void elements::Text(Context& ctx, std::wstring text, std::shared_ptr<TextRenderer> textRenderer, float sizePx, Color color) {
+    std::vector<std::wstring> words = splitWString(text, L' ');
+    for(int i = 0; i < words.size(); i++) {
+        elements::Word(ctx, words[i], textRenderer, sizePx, color);
+        if(i != words.size() - 1)
+            elements::Whitespace(ctx, textRenderer, sizePx);
+    }
 }
 
-glm::vec4 toVec4(glm::vec2 v) {
-    return glm::vec4(v, 0.0f, 1.0f);
+void elements::Word(Context& ctx, std::wstring word, std::shared_ptr<TextRenderer> textRenderer, float sizePx, Color color) {
+    switch(ctx.currentPass) {
+        case ContextPass::LAYOUT:
+        {
+            LayoutSpec spec;
+            spec.width = textRenderer->measureWidth(word, sizePx);
+            spec.height = textRenderer->measureHeight(sizePx);
+            ctx.pushLayoutSpec(spec);
+        }
+            break;
+        case ContextPass::DRAW:
+        {
+            LayoutSpec spec = ctx.popLayoutSpec();
+            textRenderer->draw(
+               ctx.context,
+               ctx.affineList.back().world *
+                   glm::translate(glm::mat4(1.0f), glm::vec3(spec.position, 0.0f)),
+               word,
+               sizePx,
+               glm::vec3(color.r, color.g, color.b),
+               color.a);
+            // std::wcout << word << L" pos: (" << spec.position.x << L", " << spec.position.y << L"), sizePx: " << sizePx << std::endl;
+        }
+            break;
+        default:
+            break;
+    }
 }
 
-Point2D Element::getScreenPosition() {
-	glm::vec2 pos = glm::vec2(this->position.x.currentValue, this->position.y.currentValue);
-	pos = glm::vec2(toVec4(pos) * this->matrix);
-	std::shared_ptr<Element> curParent = parent.lock();
-	while (curParent != nullptr) {
-		Spring2D& parentPos = curParent->position;
-		glm::vec2 parentCurPos = glm::vec2(parentPos.x.currentValue, parentPos.y.currentValue);
-		parentCurPos = glm::vec2(toVec4(parentCurPos) * curParent->matrix);
-		pos += parentCurPos;
-		curParent = curParent->parent.lock();
-	}
-	return { pos.x, pos.y };
+void elements::Whitespace(Context& ctx, std::shared_ptr<TextRenderer> textRenderer, float sizePx) {
+    switch(ctx.currentPass) {
+        case ContextPass::LAYOUT:
+        {
+            LayoutSpec spec;
+            spec.width = textRenderer->font->characters[L' '].xAdvance *
+                textRenderer->getScale(sizePx);
+            spec.height = textRenderer->measureHeight(sizePx);
+            ctx.pushLayoutSpec(spec);
+        }
+            break;
+        case ContextPass::DRAW:
+        {
+            LayoutSpec spec = ctx.popLayoutSpec();
+        }
+            break;
+        default:
+            break;
+    }
 }
+

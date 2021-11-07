@@ -68,13 +68,13 @@ float raySegmentIntersection(glm::vec2 rayOrigin, glm::vec2 rayDirection,
     glm::vec2 v3 = perpendicularCounterClockwise(rayDirection);
 
     float dot = glm::dot(v2, v3);
-    if (fabsf(dot) < 0.000001)
+    if (fabsf(dot) < 0.000001f)
         return NoIntersection;
 
     float t1 = crossProduct2D(v2, v1) / dot;
     float t2 = glm::dot(v1, v3) / dot;
 
-    if (t1 >= 0.0 && (t2 >= 0.0 && t2 <= 1.0))
+    if (t1 >= 0.0f && (t2 >= 0.0f && t2 <= 1.0f))
         return t1;
 
     return NoIntersection;

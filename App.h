@@ -6,6 +6,8 @@
 #include <RenderTarget.h>
 #include <TextRenderer.h>
 #include <Shape.h>
+#include <Elements.h>
+#include <Context.h>
 // #include <GLFW/glfw3.h>
 #include <SDL.h>
 #include <glm/glm.hpp>
@@ -83,7 +85,7 @@ private:
     ui::Spring mQuadPosX;
     std::shared_ptr<ui::Font> mFont;
     std::shared_ptr<TextRenderer> mTextRenderer;
-    std::shared_ptr<ShapeRenderer> mSolidFillRenderer;
+    std::shared_ptr<ShapeRenderer> mShapeRenderer;
 
     float mQuadTime = 0.0f;
     float mSecondTime = 0.0f;
@@ -96,6 +98,12 @@ public:
     
     Shape mRayStroke;
     bool isMouseDown = false;
+    
+    std::shared_ptr<Shape> mSquircleShape;
+    
+    Context ctx;
+    
+    void doUI();
 };
 
 static const char* VSSource = R"(
