@@ -165,95 +165,89 @@ void App::draw()
 	mImmediateContext->ClearDepthStencil(pDSV, Diligent::CLEAR_DEPTH_FLAG, 1.f, 0,
 		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-//	Diligent::Uint64   offset = 0;
-//	Diligent::IBuffer* pBuffs[] = { mQuadVertexBuffer };
-//	mImmediateContext->SetVertexBuffers(0, 1, pBuffs, &offset,
-//		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-//		Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
-//	mImmediateContext->SetIndexBuffer(mQuadIndexBuffer, 0,
-//		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-//
-//	mImmediateContext->SetPipelineState(mPSO);
-//
-//	mImmediateContext->CommitShaderResources(mSRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-//
-//	Diligent::DrawIndexedAttribs DrawAttrs;
-//	DrawAttrs.IndexType = Diligent::VT_UINT32;
-//	DrawAttrs.NumIndices = _countof(QuadIndices);
-//	DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
-//
-//	float speed = fabsf(mQuadPosX.velocity);
-//	std::vector<float>* kernel = nullptr;
-//	if (speed > 110)
-//		kernel = &GaussianKernel5x1;
-//	if (speed > 190)
-//		kernel = &GaussianKernel9x1;
-//	if (speed > 250)
-//		kernel = &GaussianKernel15x1;
-//	if (speed > 380)
-//		kernel = &GaussianKernel31x1;
-//	if (kernel != nullptr) {
-//		glm::vec2 blurDirection = glm::vec2(1.0f, 0.0f);
-//		int kernelSize = (int)kernel->size();
-//		int kernelCenter = kernelSize / 2;
-//		for (int i = 0; i < kernelSize; i++) {
-//			float offset = (float)(i - kernelCenter);
-//			float stepPx = 1.0f;
-//			glm::vec2 resolution = glm::vec2(mWidth, mHeight);
-//			glm::vec3 offsetInDirection = glm::vec3(glm::vec2(blurDirection * offset * stepPx) / resolution, 0.0f);
-//			glm::mat4 MVP = glm::translate(offsetInDirection) * mModelViewProjection;
-//			// Write model view projection matrix to uniform
-//			{
-//				Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
-//					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-//				*CBConstants = glm::transpose(MVP);
-//			}
-//			{
-//				Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
-//					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-//				*CBConstants = kernel->at(i);
-//			}
-//			mImmediateContext->DrawIndexed(DrawAttrs);
-//		}
-//	}
-//	else {
-//		{
-//			Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
-//				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-//			*CBConstants = glm::transpose(mModelViewProjection);
-//		}
-//		{
-//			Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
-//				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-//			*CBConstants = 1.0f; // opacity
-//		}
-//		mImmediateContext->DrawIndexed(DrawAttrs);
-//	}
+	Diligent::Uint64   offset = 0;
+	Diligent::IBuffer* pBuffs[] = { mQuadVertexBuffer };
+	mImmediateContext->SetVertexBuffers(0, 1, pBuffs, &offset,
+		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+		Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
+	mImmediateContext->SetIndexBuffer(mQuadIndexBuffer, 0,
+		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	mImmediateContext->SetPipelineState(mPSO);
+
+	mImmediateContext->CommitShaderResources(mSRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	Diligent::DrawIndexedAttribs DrawAttrs;
+	DrawAttrs.IndexType = Diligent::VT_UINT32;
+	DrawAttrs.NumIndices = _countof(QuadIndices);
+	DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
+
+	float speed = fabsf(mQuadPosX.velocity);
+	std::vector<float>* kernel = nullptr;
+	if (speed > 110)
+		kernel = &GaussianKernel5x1;
+	if (speed > 190)
+		kernel = &GaussianKernel9x1;
+	if (speed > 250)
+		kernel = &GaussianKernel15x1;
+	if (speed > 380)
+		kernel = &GaussianKernel31x1;
+	if (kernel != nullptr) {
+		glm::vec2 blurDirection = glm::vec2(1.0f, 0.0f);
+		int kernelSize = (int)kernel->size();
+		int kernelCenter = kernelSize / 2;
+		for (int i = 0; i < kernelSize; i++) {
+			float offset = (float)(i - kernelCenter);
+			float stepPx = 1.0f;
+			glm::vec2 resolution = glm::vec2(mWidth, mHeight);
+			glm::vec3 offsetInDirection = glm::vec3(glm::vec2(blurDirection * offset * stepPx) / resolution, 0.0f);
+			glm::mat4 MVP = glm::translate(offsetInDirection) * mModelViewProjection;
+			// Write model view projection matrix to uniform
+			{
+				Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
+					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+				*CBConstants = glm::transpose(MVP);
+			}
+			{
+				Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
+					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+				*CBConstants = kernel->at(i);
+			}
+			mImmediateContext->DrawIndexed(DrawAttrs);
+		}
+	}
+	else {
+		{
+			Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
+				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+			*CBConstants = glm::transpose(mModelViewProjection);
+		}
+		{
+			Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
+				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+			*CBConstants = 1.0f; // opacity
+		}
+		mImmediateContext->DrawIndexed(DrawAttrs);
+	}
     
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     
-    
-//	mSolidFillRenderer->draw(mImmediateContext,
+//	mShapeRenderer->draw(mImmediateContext,
 //		glm::translate(mViewProjection, glm::vec3(mSquirclePos - mSquircleFill.offset, 0.0f)), mSquircleFill, glm::vec3(1.0f), 1.0f);
 //
-//    mSolidFillRenderer->draw(mImmediateContext,
+//    mShapeRenderer->draw(mImmediateContext,
 //        glm::translate(mViewProjection, glm::vec3(mSquirclePos - mSquircleFill.offset, 0.0f)), mSquircleStroke, glm::vec3(0.0f), 1.0f);
 //
-	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-
 //    glm::vec3 textColor = glm::mix(glm::vec3(1.0, 0.1, 0.4), glm::vec3(0.2, 0.2, 0.8), sinf(getTime()) / 2.0f + 1.0f);
 //
 //	mTextRenderer->draw(mImmediateContext,
 //		mTextModelViewProjection, L"Здравствуй, мир!", mTextSize, textColor);
-	
-	std::wstring FPS = L"FPS: " + converter.from_bytes(std::to_string(mLastFPS).c_str());
-	mTextRenderer->draw(mImmediateContext,
-		glm::translate(mViewProjection, glm::vec3(glm::vec2(10.0f, 10.0f), 0.0f)), FPS, 16.0f);
-    
+//
 //    if(isMouseDown) {
-//        mSolidFillRenderer->draw(mImmediateContext,
+//        mShapeRenderer->draw(mImmediateContext,
 //            glm::translate(mViewProjection, glm::vec3(0.0f)), mRayStroke, glm::vec3(1.0f, 0.0f, 0.0f), 0.75f);
 //    }
-    
+//
 //    tube::Path path;
 //    path.points = {
 //        tube::Point(glm::vec3(500.0f, 100.0f, 0.0f), glm::vec3(550.0f, 60.0f, 0.0f)),
@@ -272,16 +266,38 @@ void App::draw()
 //    Shape stroke1 = CreateStroke(mDevice, path1Builder);
 //    Shape stroke2 = CreateStroke(mDevice, path2Builder);
 //
-//    mSolidFillRenderer->draw(mImmediateContext,
+//    mShapeRenderer->draw(mImmediateContext,
 //        glm::translate(mViewProjection, glm::vec3(0.0f)), stroke1, glm::vec3(1.0f, 0.1f, 0.1f), 1.0f);
 //
-//    mSolidFillRenderer->draw(mImmediateContext,
+//    mShapeRenderer->draw(mImmediateContext,
 //        glm::translate(mViewProjection, glm::vec3(0.0f)), stroke2, glm::vec3(0.0f), 0.5f);
     
-    ctx.currentPass = ContextPass::LAYOUT;
-    doUI();
-    ctx.currentPass = ContextPass::DRAW;
-    doUI();
+//    ctx.currentPass = ContextPass::LAYOUT;
+//    doUI();
+//    ctx.currentPass = ContextPass::DRAW;
+//    doUI();
+    
+    std::wstring FPS = L"FPS: " + converter.from_bytes(std::to_string(mLastFPS).c_str()) + L", raycasts per frame: " + converter.from_bytes(std::to_string(mLastRaycasts).c_str());
+    mTextRenderer->draw(mImmediateContext,
+        glm::translate(mViewProjection, glm::vec3(glm::vec2(10.0f, 10.0f), 0.0f)), FPS, 16.0f);
+    
+    std::vector<glm::vec2> points1 = {
+        glm::vec2(0.0f, 0.0f),
+        glm::vec2(40.0f, 70.0f),
+        glm::vec2(90.0f, 120.0f)
+    };
+    ShapeMesh mesh = strokePolyline(points1, 16);
+    std::vector<glm::vec2> points2 = {
+        glm::vec2(90.0f, 120.0f),
+        glm::vec2(180.0f + cos(getTime()) * 150, 100.0f + sin(getTime()) * 100)
+    };
+    ShapeMesh mesh2 = strokePolyline(points2, 16);
+    mesh.add(mesh2);
+    ShapeMesh join = bevelJoin(points1, points2, 16);
+    mesh.add(join);
+    Shape stroke = CreateShapeFromMesh(mDevice, mesh);
+    mShapeRenderer->draw(mImmediateContext,
+    glm::translate(mViewProjection, glm::vec3(100.0f, 100.0f, 0.0f)), stroke, glm::vec3(0.0f), 1.0f);
     
 	mSwapChain->Present();
 }
@@ -303,6 +319,9 @@ void App::update()
 		mLastFPS = mFPS;
 		mFPS = 0;
 	}
+    
+    mLastRaycasts = ctx.NumRaycasts;
+    ctx.NumRaycasts = 0;
 
 	if (mQuadTime >= 2.0f) {
 		mQuadTime = 0.0f;
@@ -567,7 +586,7 @@ void App::initializeResources()
 	mShapeRenderer = std::make_shared<ShapeRenderer>(ShapeRenderer(mDevice, mSwapChain));
 
 	tube::Path path;
-	const static glm::vec2 size = glm::vec2(100.0f, 160.0f);
+	const static glm::vec2 size = glm::vec2(100.0f * 2.0f, 160.0f * 2.0f);
 	path.points = {
 		tube::Point(glm::vec3(0.0f, size.y / 2.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f)),
 		tube::Point(glm::vec3(size.x / 2.0f, 0.0f, 0.0f), glm::vec3(size.x, 0.0f, 0.0f)),
@@ -632,9 +651,19 @@ float App::getTime()
 void App::doUI() {
     beginAffine(ctx, glm::translate(mViewProjection, glm::vec3(100.0f, 100.0f, 0.0f)));
     {
+        if(ctx.currentPass == ContextPass::DRAW) {
+            mShapeRenderer->draw(
+                mImmediateContext,
+                ctx.affineList.back().world *
+                glm::translate(glm::mat4(1.0f), glm::vec3(mSquircleShape->offset, 0.0f)),
+                *mSquircleShape.get(),
+                glm::vec3(1.0f),
+                0.5f);
+        }
+        
         beginBoundary(ctx, mSquircleShape);
         {
-            elements::Text(ctx, L"Hello world!", ctx.textRenderer,
+            elements::Text(ctx, L"Идейные соображения высшего порядка, а также рамки и место обучения кадров способствует подготовки и реализации дальнейших направлений развития", ctx.textRenderer,
                            24.0f, Color(0.0f, 0.0f, 0.0f, 1.0f));
         }
         endBoundary(ctx);

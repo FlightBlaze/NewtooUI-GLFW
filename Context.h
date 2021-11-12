@@ -25,7 +25,9 @@ struct ClippingMask {
 };
 
 struct LayoutLine {
-    float width, height;
+    float width = 0.0f;
+    float height = 0.0f;
+    glm::vec2 position = glm::vec2(0.0f);
 };
 
 struct Boundary {
@@ -66,4 +68,11 @@ public:
     
     void pushLayoutSpec(LayoutSpec ls);
     LayoutSpec popLayoutSpec();
+    
+    int NumRaycasts = 0;
+    
+private:
+    void newLineIfNeeded(Boundary& b, glm::vec2 position, glm::vec2 padding);
+    void newLine(Boundary& b, glm::vec2 position, glm::vec2 padding);
+    void doLayout(LayoutSpec& ls, Boundary& b);
 };

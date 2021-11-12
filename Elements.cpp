@@ -53,7 +53,7 @@ void elements::Word(Context& ctx, std::wstring word, std::shared_ptr<TextRendere
                sizePx,
                glm::vec3(color.r, color.g, color.b),
                color.a);
-            // std::wcout << word << L" pos: (" << spec.position.x << L", " << spec.position.y << L"), sizePx: " << sizePx << std::endl;
+//             std::wcout << word << L" pos: (" << spec.position.x << L", " << spec.position.y << L"), sizePx: " << sizePx << std::endl;
         }
             break;
         default:

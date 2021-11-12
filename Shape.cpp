@@ -2,6 +2,7 @@
 #include "Graphics/GraphicsTools/interface/CommonlyUsedStates.h"
 #include "Graphics/GraphicsTools/interface/MapHelper.hpp"
 #include <glm/gtx/transform.hpp>
+#include <glm/gtx/vector_angle.hpp>
 #include <Tube.h>
 #include <cmath>
 
@@ -266,4 +267,161 @@ float Shape::intersectsRay(glm::vec2 rayOrigin, glm::vec2 rayDirection) {
                                                       this->vertices[0].position,
                                                       this->vertices.back().position));
     return distance;
+}
+
+void ShapeMesh::add(ShapeMesh& b) {
+    int plusVertices = this->vertices.size();
+    int plusIndices = this->indices.size();
+    this->vertices.resize(this->vertices.size() + b.vertices.size());
+    this->indices.resize(this->indices.size() + b.indices.size());
+    for(int i = 0; i < b.vertices.size(); i++)
+        this->vertices[i + plusVertices] = b.vertices[i];
+    for(int i = 0; i < b.indices.size(); i++) {
+        TriangeIndices tri = b.indices[i];
+        tri.a += plusVertices;
+        tri.b += plusVertices;
+        tri.c += plusVertices;
+        this->indices[i + plusIndices] = tri;
+    }
+}
+
+ShapeMesh strokePolyline(std::vector<glm::vec2>& points, const float diameter) {
+    float radius = diameter / 2.0f;
+    size_t numPoints = points.size();
+    ShapeMesh mesh;
+    
+    // Calculate arrays size
+    mesh.vertices.resize(numPoints * 2);
+    mesh.indices.resize(numPoints * 2 - 2);
+    
+    // For each point we add two points to the mesh and
+    // connect them with previous two points if any
+    for(size_t i = 0; i < numPoints; i++) {
+        // Check for tips
+        bool isStart = i == 0;
+        bool isEnd = i == numPoints - 1;
+
+        // Retrieve points
+        glm::vec2 currentPoint = points[i];
+        glm::vec2 backPoint = !isStart ? points[i - 1LL] : currentPoint;
+        glm::vec2 nextPoint = !isEnd   ? points[i + 1LL] : currentPoint;
+        
+        // Calculate three diections
+        glm::vec2 forwardDir  = glm::normalize(nextPoint - currentPoint);
+        glm::vec2 backwardDir = glm::normalize(backPoint - currentPoint) * -1.0f;
+        glm::vec2 meanDir;
+        
+        // Calculate mean of forward and backward directions
+        if (isStart) meanDir = forwardDir;
+        else if (isEnd) meanDir = backwardDir;
+        else meanDir = (forwardDir + backwardDir) / 2.0f;
+        
+        // Perpendicular to mean direction
+        glm::vec2 a = glm::vec2(meanDir.y, -meanDir.x) * radius;
+        glm::vec2 b = -a;
+        
+        // Put put vectors into the right place
+        a += currentPoint;
+        b += currentPoint;
+        
+        // Add vectors to mesh vertices
+        size_t currentVertexIndex = i * 2;
+        size_t previousVertexIndex = currentVertexIndex - 2;
+        mesh.vertices.at(currentVertexIndex) = a;
+        mesh.vertices.at(currentVertexIndex + 1LL) = b;
+        
+        // Connect vertices with bridge of two trianges
+        if(!isStart) {
+            int idxA = currentVertexIndex;
+            int idxB = currentVertexIndex + 1;
+            int idxC = previousVertexIndex;
+            int idxD = previousVertexIndex + 1;
+            TriangeIndices m { idxA, idxB, idxC };
+            TriangeIndices k { idxB, idxC, idxD };
+            size_t index = i * 2LL - 2;
+            mesh.indices.at(index) = m;
+            mesh.indices.at(index + 1LL) = k;
+        }
+    }
+    return mesh;
+}
+
+ShapeMesh bevelJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter) {
+    float radius = diameter / 2.0f;
+    ShapeMesh mesh;
+    
+    glm::vec2 center = b.at(0);
+    glm::vec2 dirA = glm::normalize(a.at(a.size() - 1) - a.at(a.size() - 2));
+    glm::vec2 dirB = glm::normalize(b.at(1) - b.at(0));
+    
+    // --A   C-__
+    //   |  /    --
+    // --B  D-__
+    //          --
+    
+    glm::vec2 Ad = glm::vec2(dirA.y, -dirA.x) * radius;
+    glm::vec2 Bd = -Ad;
+    glm::vec2 Cd = glm::vec2(dirB.y, -dirB.x) * radius;
+    glm::vec2 Dd = -Cd;
+    glm::vec2 A = Ad + center;
+    glm::vec2 B = Bd + center;
+    glm::vec2 C = Cd + center;
+    glm::vec2 D = Dd + center;
+    
+    float angle = glm::orientedAngle(dirA, dirB);
+    
+    mesh.vertices.resize(3);
+    mesh.vertices.at(0) = center;
+    if(angle > 0) {
+        mesh.vertices.at(1) = A;
+        mesh.vertices.at(2) = C;
+    }
+    if(angle < 0) {
+        mesh.vertices.at(1) = B;
+        mesh.vertices.at(2) = D;
+    }
+    TriangeIndices tri { 0, 1, 2};
+    mesh.indices.push_back(tri);
+    
+    return mesh;
+}
+
+MinMax2 CalculateBoundingBoxVec2(std::vector<glm::vec2>& verts) {
+    MinMax2 bounds;
+    const static float BigValue = 10000.0f;
+    bounds.minX = BigValue;
+    bounds.maxX = -BigValue;
+    bounds.minY = BigValue;
+    bounds.maxY = -BigValue;
+    for (auto& vert : verts) {
+        bounds.minX = fminf(bounds.minX, vert.x);
+        bounds.maxX = fmaxf(bounds.maxX, vert.x);
+        bounds.minY = fminf(bounds.minY, vert.y);
+        bounds.maxY = fmaxf(bounds.maxY, vert.y);
+    }
+    return bounds;
+}
+
+Shape CreateShapeFromMesh(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                   ShapeMesh& mesh)
+{
+    Shape stroke;
+    std::vector<ShapeVertex> vertices;
+    vertices.resize(mesh.vertices.size());
+    for (int i = 0; i < vertices.size(); i++) {
+        vertices[i].position = glm::vec3(mesh.vertices[i], 0.0f);
+        vertices[i].texCoord = glm::vec2(0.0f);
+    }
+    std::vector<int> indices;
+    indices.resize(mesh.indices.size() * 3);
+    for (int i = 0; i < mesh.indices.size(); i++) {
+        TriangeIndices tri = mesh.indices[i];
+        int shiftedI = i * 3;
+        indices[shiftedI] = tri.a;
+        indices[shiftedI + 1LL] = tri.b;
+        indices[shiftedI + 2LL] = tri.c;
+    }
+    PopulateShapeDimensions(CalculateBoundingBoxVec2(mesh.vertices), stroke);
+    PopulateShapeBuffers(renderDevice, vertices, indices, stroke);
+    return stroke;
 }

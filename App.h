@@ -91,6 +91,7 @@ private:
     float mSecondTime = 0.0f;
     int mLastFPS = 0;
     int mFPS = 0;
+    int mLastRaycasts = 0;
 public:
     glm::vec2 mSquirclePos;
     Shape mSquircleFill;

@@ -107,3 +107,20 @@ void main(in  VSInput VSIn,
     PSIn.UV = VSIn.TexCoord;
 }
 )";
+
+struct TriangeIndices {
+    int a, b, c;
+};
+
+struct ShapeMesh {
+    std::vector<glm::vec2> vertices;
+    std::vector<TriangeIndices> indices;
+    
+    void add(ShapeMesh& b);
+};
+
+ShapeMesh strokePolyline(std::vector<glm::vec2>& points, const float diameter);
+ShapeMesh bevelJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter);
+
+Shape CreateShapeFromMesh(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
+                          ShapeMesh& mesh);
