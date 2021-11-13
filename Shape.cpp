@@ -376,12 +376,129 @@ ShapeMesh bevelJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
         mesh.vertices.at(1) = A;
         mesh.vertices.at(2) = C;
     }
-    if(angle < 0) {
+    else {
         mesh.vertices.at(1) = B;
         mesh.vertices.at(2) = D;
     }
-    TriangeIndices tri { 0, 1, 2};
+    TriangeIndices tri { 0, 1, 2 };
     mesh.indices.push_back(tri);
+    
+    return mesh;
+}
+
+std::vector<glm::vec2> quadraticBezier2D(glm::vec2 p0, glm::vec2 p1, glm::vec2 p2, int segments) {
+    auto points = std::vector<glm::vec2>(segments);
+    float step = 1.0f / (segments - 1);
+    float t = 0.0f;
+    for (int i = 0; i < segments; i++) {
+        glm::vec2 q0 = glm::mix(p0, p1, t);
+        glm::vec2 q1 = glm::mix(p1, p2, t);
+        glm::vec2 r = glm::mix(q0, q1, t);
+        points[i] = r;
+        t += step;
+    }
+    return points;
+}
+
+std::vector<glm::vec2> cubicBezier2D(glm::vec2 p0, glm::vec2 p1, glm::vec2 p2, glm::vec2 p3, int segments) {
+    auto points = std::vector<glm::vec2>(segments);
+    float step = 1.0f / (segments - 1);
+    float t = 0.0f;
+    for (int i = 0; i < segments; i++) {
+        glm::vec2 q0 = glm::mix(p0, p1, t);
+        glm::vec2 q1 = glm::mix(p1, p2, t);
+        glm::vec2 q2 = glm::mix(p2, p3, t);
+        glm::vec2 r0 = glm::mix(q0, q1, t);
+        glm::vec2 r1 = glm::mix(q1, q2, t);
+        glm::vec2 b = glm::mix(r0, r1, t);
+        points[i] = b;
+        t += step;
+    }
+    return points;
+}
+
+std::vector<TriangeIndices> createIndicesConvex2D(size_t numVertices) {
+    size_t amount = numVertices - 2;
+    auto indices = std::vector<TriangeIndices>(amount);
+    int k = 1;
+    for (size_t i = 0; i < amount; i++)
+    {
+        indices[i].a = 0;
+        
+        // Connect current edge with next
+        indices[i].b = k;
+        indices[i].c = k + 1;
+        k++;
+    }
+    return indices;
+}
+
+std::vector<glm::vec2> createPie(float startAngle, float endAngle, float radius, int segments, glm::vec2 offset) {
+    auto arcVerts = std::vector<glm::vec2>(segments);
+    float angle = startAngle;
+    float arcLength = endAngle - startAngle;
+    for (int i = 0; i <= segments - 1; i++) {
+        float x = sin(angle) * radius;
+        float y = cos(angle) * radius;
+
+        arcVerts[i] = glm::vec2(x, y) + offset;
+        angle += (arcLength / segments);
+    }
+    return arcVerts;
+}
+
+//   0
+//  / \
+// 1---2
+//  \ /
+//   3
+
+ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter) {
+    float radius = diameter / 2.0f;
+    ShapeMesh mesh;
+    
+    glm::vec2 center = b.at(0);
+    glm::vec2 dirA = glm::normalize(a.at(a.size() - 1) - a.at(a.size() - 2));
+    glm::vec2 dirB = glm::normalize(b.at(1) - b.at(0));
+    glm::vec2 meanDir = glm::normalize((dirA + dirB) / 2.0f);
+    
+    glm::vec2 Ad = glm::vec2(dirA.y, -dirA.x) * radius;
+    glm::vec2 Bd = -Ad;
+    glm::vec2 Cd = glm::vec2(dirB.y, -dirB.x) * radius;
+    glm::vec2 Dd = -Cd;
+    glm::vec2 Ed = glm::vec2(meanDir.y, -meanDir.x) * radius;
+    glm::vec2 Fd = -Ed;
+    glm::vec2 A = Ad + center;
+    glm::vec2 B = Bd + center;
+    glm::vec2 C = Cd + center;
+    glm::vec2 D = Dd + center;
+    glm::vec2 E = Ed + center;
+    glm::vec2 F = Fd + center;
+    
+    float angle = glm::orientedAngle(dirA, dirB);
+    
+    static const int numCurveSegments = 32;
+    mesh.vertices.resize(1);
+    mesh.vertices.at(0) = center;
+    std::vector<glm::vec2> curve;
+    float start = 0;
+    float end = 0;
+    if(angle > 0) {
+//        glm::vec2 p1 = A + (E - A) / 2.0f;
+//        glm::vec2 p2 = C + (E - C) / 2.0f;
+//        curve = cubicBezier2D(A, p1, p2, C, numCurveSegments);
+        start = atan2f(Ad.x, Ad.y);
+        end = atan2f(Cd.x, Cd.y) - 0.1f;
+    }
+    else {
+//        curve = quadraticBezier2D(B, F, D, numCurveSegments);
+        start = atan2f(Bd.x, Bd.y);
+        end = atan2f(Dd.x, Dd.y) + 0.1f;
+    }
+    curve = createPie(start, end, radius, 32, center);
+    mesh.vertices.insert(mesh.vertices.end(), curve.begin(), curve.end());
+    std::vector<TriangeIndices> tris = createIndicesConvex2D(mesh.vertices.size());
+    mesh.indices.insert(mesh.indices.end(), tris.begin(), tris.end());
     
     return mesh;
 }
