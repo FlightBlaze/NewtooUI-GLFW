@@ -281,16 +281,20 @@ void App::draw()
     mTextRenderer->draw(mImmediateContext,
         glm::translate(mViewProjection, glm::vec3(glm::vec2(10.0f, 10.0f), 0.0f)), FPS, 16.0f);
     
+    float t = 0.5f + sinf(getTime()) / 2.0f;
+    
     std::vector<glm::vec2> points1 = {
         glm::vec2(0.0f, 0.0f),
         glm::vec2(40.0f, 70.0f),
         glm::vec2(90.0f, 120.0f)
     };
+    points1 = dividePolyline(points1, t).second;
     ShapeMesh mesh = strokePolyline(points1, 16);
     std::vector<glm::vec2> points2 = {
         glm::vec2(90.0f, 120.0f),
-        glm::vec2(180.0f + cos(getTime()) * 150, 100.0f + sin(getTime()) * 100)
+        glm::vec2(180.0f/* + cos(getTime()) * 150*/, 100.0f/* + sin(getTime()) * 100*/)
     };
+    points2 = dividePolyline(points2, t).first;
     ShapeMesh mesh2 = strokePolyline(points2, 16);
     mesh.add(mesh2);
     ShapeMesh join = miterJoin(points1, points2, 16);

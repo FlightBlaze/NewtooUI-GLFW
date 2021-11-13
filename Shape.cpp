@@ -290,6 +290,9 @@ ShapeMesh strokePolyline(std::vector<glm::vec2>& points, const float diameter) {
     size_t numPoints = points.size();
     ShapeMesh mesh;
     
+    if(points.size() < 2)
+        return mesh;
+    
     // Calculate arrays size
     mesh.vertices.resize(numPoints * 2);
     mesh.indices.resize(numPoints * 2 - 2);
@@ -346,9 +349,18 @@ ShapeMesh strokePolyline(std::vector<glm::vec2>& points, const float diameter) {
     return mesh;
 }
 
+bool isCurvesCorrectForJoining(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b) {
+    if (a.size() < 2 || b.size() < 2)
+        return false;
+    return true;
+}
+
 ShapeMesh bevelJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter) {
     float radius = diameter / 2.0f;
     ShapeMesh mesh;
+    
+    if(!isCurvesCorrectForJoining(a, b))
+        return mesh;
     
     glm::vec2 center = b.at(0);
     glm::vec2 dirA = glm::normalize(a.at(a.size() - 1) - a.at(a.size() - 2));
@@ -451,6 +463,9 @@ ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
     float radius = diameter / 2.0f;
     ShapeMesh mesh;
     
+    if(!isCurvesCorrectForJoining(a, b))
+        return mesh;
+    
     glm::vec2 center = b.at(0);
     glm::vec2 dirA = glm::normalize(a.at(a.size() - 1) - a.at(a.size() - 2));
     glm::vec2 dirB = glm::normalize(b.at(1) - b.at(0));
@@ -512,9 +527,13 @@ glm::vec2 LineLineIntersection(glm::vec2 v1, glm::vec2 v2, glm::vec2 v3, glm::ve
     return EliminationLineLineIntersection(v1, v2, v3, v4);
 }
 
-ShapeMesh miterJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter, float miterLimit) {
+ShapeMesh miterJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter,
+                    float miterLimitAngle) {
     float radius = diameter / 2.0f;
     ShapeMesh mesh;
+    
+    if(!isCurvesCorrectForJoining(a, b))
+        return mesh;
     
     glm::vec2 center = b.at(0);
     glm::vec2 dirA = glm::normalize(a.at(a.size() - 1) - a.at(a.size() - 2));
@@ -522,7 +541,7 @@ ShapeMesh miterJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
     
     float angle = glm::orientedAngle(dirA, dirB);
     
-    if (fabsf(angle) > miterLimit)
+    if (fabsf(angle) > miterLimitAngle)
         return bevelJoin(a, b, diameter);
     
     glm::vec2 Ad = glm::vec2(dirA.y, -dirA.x) * radius;
@@ -560,6 +579,35 @@ ShapeMesh miterJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
     mesh.indices.insert(mesh.indices.end(), tris.begin(), tris.end());
     
     return mesh;
+}
+
+TwoPolylines dividePolyline(std::vector<glm::vec2>& points, float t) {
+    TwoPolylines twoLines;
+    if (t <= 0) {
+        twoLines.second = points;
+        return twoLines;
+    }
+    if (t >= 1) {
+        twoLines.first = points;
+        return twoLines;
+    }
+    float remapedT = t * (float)(points.size() - 1);
+    int segmentIdx = (int)floorf(remapedT);
+    float segmentT = remapedT - (float)segmentIdx;
+    
+    twoLines.first.resize(segmentIdx + 2);
+    for (int i = 0; i < segmentIdx + 1; i++) {
+        twoLines.first.at(i) = points.at(i);
+    }
+    twoLines.first.at(segmentIdx + 1) = glm::mix(points.at(segmentIdx), points.at(segmentIdx + 1), segmentT);
+    
+    twoLines.second.resize(points.size() - segmentIdx);
+    for (int i = 1; i < twoLines.second.size(); i++){
+        twoLines.second.at(i) = points.at(segmentIdx + i);
+    }
+    twoLines.second.at(0) = glm::mix(points.at(segmentIdx), points.at(segmentIdx + 1), segmentT);
+    
+    return twoLines;
 }
 
 MinMax2 CalculateBoundingBoxVec2(std::vector<glm::vec2>& verts) {

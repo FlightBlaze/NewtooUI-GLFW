@@ -108,6 +108,10 @@ void main(in  VSInput VSIn,
 }
 )";
 
+struct TwoPolylines {
+    std::vector<glm::vec2> first, second;
+};
+
 struct TriangeIndices {
     int a, b, c;
 };
@@ -122,7 +126,9 @@ struct ShapeMesh {
 ShapeMesh strokePolyline(std::vector<glm::vec2>& points, const float diameter);
 ShapeMesh bevelJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter);
 ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter);
-ShapeMesh miterJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter, float miterLimit = M_PI_2 + M_PI_4);
+ShapeMesh miterJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter,
+                    float miterLimitAngle = M_PI_2 + M_PI_4);
+TwoPolylines dividePolyline(std::vector<glm::vec2>& points, float t);
 
 Shape CreateShapeFromMesh(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                           ShapeMesh& mesh);
