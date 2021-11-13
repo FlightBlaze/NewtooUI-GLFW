@@ -677,6 +677,9 @@ float tAtLength(float length, std::vector<float>& lengths) {
     float previousLength = 0.0f;
     float currentLength = 0.0f;
     float localT = 0.0f;
+    if(lengths.size() > 0) {
+        localT = fminf(length, lengths.at(0));
+    }
     for (size_t i = 0; i < lengths.size(); i++) {
         previousLength = currentLength;
         currentLength += lengths.at(i);
@@ -690,9 +693,33 @@ float tAtLength(float length, std::vector<float>& lengths) {
     return t;
 }
 
-std::vector<std::vector<glm::vec2>> dashedPolyline(std::vector<glm::vec2>& points, float dashLength, float gapLength) {
+std::vector<std::vector<glm::vec2>> dashedPolyline(std::vector<glm::vec2>& points,
+                                                   float dashLength, float gapLength,
+                                                   float offset) {
     std::vector<std::vector<glm::vec2>> lines;
     std::vector<glm::vec2> currentPath = points;
+    
+    float dashGapLength = dashLength + gapLength;
+    float offsetTimes = floorf(fabsf(offset) / dashGapLength);
+    float localOffset = fabsf(offset) - offsetTimes * dashGapLength;
+    if(offset > 0) {
+        std::vector<float> lengths = measurePolyline(currentPath);
+        if(localOffset > gapLength) {
+            float startDashLength = localOffset - gapLength;
+            lines.push_back(dividePolyline(currentPath, tAtLength(startDashLength, lengths)).first);
+        }
+        currentPath = dividePolyline(currentPath, tAtLength(localOffset, lengths)).second;
+    }
+    else if(offset < 0) {
+        std::vector<float> lengths = measurePolyline(currentPath);
+        if(localOffset < dashLength) {
+            float startDashLength = dashLength - localOffset;
+            lines.push_back(dividePolyline(currentPath, tAtLength(startDashLength, lengths)).first);
+        }
+        currentPath = dividePolyline(currentPath, tAtLength(dashGapLength - localOffset,
+                                                            lengths)).second;
+    }
+    
     static const int maxDashes = 999;
     for(int i = 0; i < maxDashes; i++) {
         std::vector<float> lengths = measurePolyline(currentPath);
@@ -700,8 +727,12 @@ std::vector<std::vector<glm::vec2>> dashedPolyline(std::vector<glm::vec2>& point
         if(twoPathes.first.size() < 2)
             break;
         lines.push_back(twoPathes.first);
+        if(twoPathes.second.size() < 2)
+            break;
         std::vector<float> secondLengths = measurePolyline(twoPathes.second);
         currentPath = dividePolyline(twoPathes.second, tAtLength(gapLength, secondLengths)).second;
+        if(currentPath.size() < 2)
+            break;
     }
     return lines;
 }

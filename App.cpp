@@ -288,7 +288,7 @@ void App::draw()
         glm::vec2(40.0f, 70.0f),
         glm::vec2(90.0f, 120.0f)
     };
-    auto lines1 = dashedPolyline(points1, 24.0f, 12.0f);
+    auto lines1 = dashedPolyline(points1, 24.0f, 12.0f, sin(getTime()) * 80.0f);
     ShapeMesh mesh;
     for(auto line : lines1) {
         ShapeMesh strokeMesh = strokePolyline(line, 16);
