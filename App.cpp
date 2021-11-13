@@ -293,7 +293,7 @@ void App::draw()
     };
     ShapeMesh mesh2 = strokePolyline(points2, 16);
     mesh.add(mesh2);
-    ShapeMesh join = roundJoin(points1, points2, 16);
+    ShapeMesh join = miterJoin(points1, points2, 16);
     mesh.add(join);
     Shape stroke = CreateShapeFromMesh(mDevice, mesh);
     mShapeRenderer->draw(mImmediateContext,

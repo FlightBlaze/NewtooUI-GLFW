@@ -433,7 +433,7 @@ std::vector<TriangeIndices> createIndicesConvex2D(size_t numVertices) {
     return indices;
 }
 
-std::vector<glm::vec2> createPie(float startAngle, float endAngle, float radius, int segments, glm::vec2 offset) {
+std::vector<glm::vec2> createArc(float startAngle, float endAngle, float radius, int segments, glm::vec2 offset) {
     auto arcVerts = std::vector<glm::vec2>(segments);
     float angle = startAngle;
     float arcLength = endAngle - startAngle;
@@ -447,12 +447,6 @@ std::vector<glm::vec2> createPie(float startAngle, float endAngle, float radius,
     return arcVerts;
 }
 
-//   0
-//  / \
-// 1---2
-//  \ /
-//   3
-
 ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter) {
     float radius = diameter / 2.0f;
     ShapeMesh mesh;
@@ -460,20 +454,15 @@ ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
     glm::vec2 center = b.at(0);
     glm::vec2 dirA = glm::normalize(a.at(a.size() - 1) - a.at(a.size() - 2));
     glm::vec2 dirB = glm::normalize(b.at(1) - b.at(0));
-    glm::vec2 meanDir = glm::normalize((dirA + dirB) / 2.0f);
     
     glm::vec2 Ad = glm::vec2(dirA.y, -dirA.x) * radius;
     glm::vec2 Bd = -Ad;
     glm::vec2 Cd = glm::vec2(dirB.y, -dirB.x) * radius;
     glm::vec2 Dd = -Cd;
-    glm::vec2 Ed = glm::vec2(meanDir.y, -meanDir.x) * radius;
-    glm::vec2 Fd = -Ed;
     glm::vec2 A = Ad + center;
     glm::vec2 B = Bd + center;
     glm::vec2 C = Cd + center;
     glm::vec2 D = Dd + center;
-    glm::vec2 E = Ed + center;
-    glm::vec2 F = Fd + center;
     
     float angle = glm::orientedAngle(dirA, dirB);
     
@@ -484,20 +473,90 @@ ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
     float start = 0;
     float end = 0;
     if(angle > 0) {
-//        glm::vec2 p1 = A + (E - A) / 2.0f;
-//        glm::vec2 p2 = C + (E - C) / 2.0f;
-//        curve = cubicBezier2D(A, p1, p2, C, numCurveSegments);
         start = atan2f(Ad.x, Ad.y);
         end = atan2f(Cd.x, Cd.y) - 0.1f;
     }
     else {
-//        curve = quadraticBezier2D(B, F, D, numCurveSegments);
         start = atan2f(Bd.x, Bd.y);
         end = atan2f(Dd.x, Dd.y) + 0.1f;
     }
-    curve = createPie(start, end, radius, 32, center);
+    curve = createArc(start, end, radius, 32, center);
     mesh.vertices.insert(mesh.vertices.end(), curve.begin(), curve.end());
     std::vector<TriangeIndices> tris = createIndicesConvex2D(mesh.vertices.size());
+    mesh.indices.insert(mesh.indices.end(), tris.begin(), tris.end());
+    
+    return mesh;
+}
+
+glm::vec2 EliminationLineLineIntersection(glm::vec2 v1, glm::vec2 v2, glm::vec2 v3, glm::vec2 v4)
+{
+    float x12 = v1.x - v2.x;
+    float x34 = v3.x - v4.x;
+    float y12 = v1.y - v2.y;
+    float y34 = v3.y - v4.y;
+    float c = x12 * y34 - y12 * x34;
+    float a = v1.x * v2.y - v1.y * v2.x;
+    float b = v3.x * v4.y - v3.y * v4.x;
+    if(c != 0) {
+        float x = (a * x34 - b * x12) / c;
+        float y = (a * y34 - b * y12) / c;
+        return glm::vec2(x, y);
+    }
+    else {
+        // Lines are parallel
+        return glm::vec2(0.0f);
+    }
+}
+
+glm::vec2 LineLineIntersection(glm::vec2 v1, glm::vec2 v2, glm::vec2 v3, glm::vec2 v4) {
+    return EliminationLineLineIntersection(v1, v2, v3, v4);
+}
+
+ShapeMesh miterJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter, float miterLimit) {
+    float radius = diameter / 2.0f;
+    ShapeMesh mesh;
+    
+    glm::vec2 center = b.at(0);
+    glm::vec2 dirA = glm::normalize(a.at(a.size() - 1) - a.at(a.size() - 2));
+    glm::vec2 dirB = glm::normalize(b.at(1) - b.at(0));
+    
+    float angle = glm::orientedAngle(dirA, dirB);
+    
+    if (fabsf(angle) > miterLimit)
+        return bevelJoin(a, b, diameter);
+    
+    glm::vec2 Ad = glm::vec2(dirA.y, -dirA.x) * radius;
+    glm::vec2 Bd = -Ad;
+    glm::vec2 Cd = glm::vec2(dirB.y, -dirB.x) * radius;
+    glm::vec2 Dd = -Cd;
+    glm::vec2 A = Ad + center;
+    glm::vec2 B = Bd + center;
+    glm::vec2 C = Cd + center;
+    glm::vec2 D = Dd + center;
+    
+    mesh.vertices.resize(4);
+    mesh.vertices.at(0) = center;
+    if(angle > 0) {
+        glm::vec2 I = LineLineIntersection(A, A + dirA, C, C + dirB);
+        mesh.vertices.at(1) = A;
+        mesh.vertices.at(2) = C;
+        mesh.vertices.at(3) = I;
+    }
+    else {
+        glm::vec2 I = LineLineIntersection(B, B + dirA, D, D + dirB);
+        mesh.vertices.at(1) = B;
+        mesh.vertices.at(2) = D;
+        mesh.vertices.at(3) = I;
+    }
+    //   0
+    //  / \
+    // 1---2
+    //  \ /
+    //   3
+    std::vector<TriangeIndices> tris = {
+        { 0, 1, 2 },
+        { 1, 2, 3 }
+    };
     mesh.indices.insert(mesh.indices.end(), tris.begin(), tris.end());
     
     return mesh;

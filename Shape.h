@@ -122,6 +122,7 @@ struct ShapeMesh {
 ShapeMesh strokePolyline(std::vector<glm::vec2>& points, const float diameter);
 ShapeMesh bevelJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter);
 ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter);
+ShapeMesh miterJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter, float miterLimit = M_PI_2 + M_PI_4);
 
 Shape CreateShapeFromMesh(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                           ShapeMesh& mesh);
