@@ -129,6 +129,7 @@ ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
 ShapeMesh miterJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter,
                     float miterLimitAngle = M_PI_2 + M_PI_4);
 TwoPolylines dividePolyline(std::vector<glm::vec2>& points, float t);
+std::vector<std::vector<glm::vec2>> dashedPolyline(std::vector<glm::vec2>& points, float dashLength, float gapLength);
 
 Shape CreateShapeFromMesh(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                           ShapeMesh& mesh);

@@ -649,3 +649,59 @@ Shape CreateShapeFromMesh(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> rende
     PopulateShapeBuffers(renderDevice, vertices, indices, stroke);
     return stroke;
 }
+
+float lengthOfPolyline(std::vector<glm::vec2>& points) {
+    if (points.size() < 2)
+        return 0.0f;
+
+    glm::vec2 previousPoint = points.at(0);
+    float length = 0.0f;
+    for (size_t i = 1; i < points.size(); i++) {
+        length += glm::distance(points.at(i), previousPoint);
+        previousPoint = points.at(i);
+    }
+    return length;
+}
+
+std::vector<float> measurePolyline(std::vector<glm::vec2>& points) {
+    std::vector<float> lengths;
+    lengths.resize(points.size() - 1); // number of segments
+    for (size_t i = 0; i < lengths.size(); i++) {
+        lengths.at(i) = glm::distance(points.at(i), points.at(i + 1LL));
+    }
+    return lengths;
+}
+
+float tAtLength(float length, std::vector<float>& lengths) {
+    size_t pointBeforeLength = 0;
+    float previousLength = 0.0f;
+    float currentLength = 0.0f;
+    float localT = 0.0f;
+    for (size_t i = 0; i < lengths.size(); i++) {
+        previousLength = currentLength;
+        currentLength += lengths.at(i);
+        if (length < currentLength) {
+            pointBeforeLength = i;
+            localT = (length - previousLength) / lengths.at(i);
+            break;
+        }
+    }
+    float t = ((float)pointBeforeLength + localT) / (float)lengths.size();
+    return t;
+}
+
+std::vector<std::vector<glm::vec2>> dashedPolyline(std::vector<glm::vec2>& points, float dashLength, float gapLength) {
+    std::vector<std::vector<glm::vec2>> lines;
+    std::vector<glm::vec2> currentPath = points;
+    static const int maxDashes = 999;
+    for(int i = 0; i < maxDashes; i++) {
+        std::vector<float> lengths = measurePolyline(currentPath);
+        TwoPolylines twoPathes = dividePolyline(currentPath, tAtLength(dashLength, lengths));
+        if(twoPathes.first.size() < 2)
+            break;
+        lines.push_back(twoPathes.first);
+        std::vector<float> secondLengths = measurePolyline(twoPathes.second);
+        currentPath = dividePolyline(twoPathes.second, tAtLength(gapLength, secondLengths)).second;
+    }
+    return lines;
+}
