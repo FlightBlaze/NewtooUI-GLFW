@@ -303,6 +303,10 @@ void App::draw()
     mesh.add(mesh2);
     ShapeMesh join = roundJoin(points1, points2, 16);
     mesh.add(join);
+    ShapeMesh cap1 = roundedCap(points2.back(),
+                                points2[points2.size() - 1] - points2[points2.size() - 2],
+                                16);
+    mesh.add(cap1);
     Shape stroke = CreateShapeFromMesh(mDevice, mesh);
     mShapeRenderer->draw(mImmediateContext,
     glm::translate(mViewProjection, glm::vec3(100.0f, 100.0f, 0.0f)), stroke, glm::vec3(0.0f), 1.0f);
@@ -356,8 +360,7 @@ void App::draw()
         
         Shape triangle = CreateShapeFromMesh(mDevice, mesh1);
         mShapeRenderer->draw(mImmediateContext,
-        glm::translate(mViewProjection, glm::vec3(600.0f, 100.0f, 0.0f)), triangle, glm::vec3(0.0f), 1.0f);
-        
+        glm::translate(mViewProjection, glm::vec3(600.0f, 300.0f, 0.0f)), triangle, glm::vec3(0.0f), 1.0f);
     }
     
 	mSwapChain->Present();

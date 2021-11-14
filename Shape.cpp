@@ -510,19 +510,31 @@ ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
     std::vector<glm::vec2> curve;
     float start = 0;
     float end = 0;
+    
+    glm::vec2 up;
+    
     if(angle > 0) {
-        start = atan2f(Ad.x, Ad.y);
-        end = atan2f(Cd.x, Cd.y) - 0.1f;
+        start = atan2(Ad.x, Ad.y);
+        end = atan2(Cd.x, Cd.y) - 0.1f;
+        up = Ad;
     }
     else {
         start = atan2f(Bd.x, Bd.y);
         end = atan2f(Dd.x, Dd.y) + 0.1f;
+        up = Bd;
     }
-    if(isVec2BiggerThan(center, Ad)) {
+//    if(isVec2BiggerThan(center, Ad)) {
+//        start = positiveAngle(start);
+//        end = positiveAngle(end);
+//    }
+    curve = createArc(start, end, radius, 32, center);
+    
+    // if arc is inverted
+    if(glm::dot(glm::normalize(curve.at(15) - center), up) < 0) {
         start = positiveAngle(start);
         end = positiveAngle(end);
+        curve = createArc(start, end, radius, 32, center);
     }
-    curve = createArc(start, end, radius, 32, center);
     mesh.vertices.insert(mesh.vertices.end(), curve.begin(), curve.end());
     std::vector<TriangeIndices> tris = createIndicesConvex2D(mesh.vertices.size());
     mesh.indices.insert(mesh.indices.end(), tris.begin(), tris.end());
@@ -762,4 +774,39 @@ std::vector<std::vector<glm::vec2>> dashedPolyline(std::vector<glm::vec2>& point
             break;
     }
     return lines;
+}
+
+ShapeMesh roundedCap(glm::vec2 position, glm::vec2 direction, const float diameter) {
+    float radius = diameter / 2.0f;
+    ShapeMesh mesh;
+    
+    glm::vec2 Ad = glm::vec2(direction.y, -direction.x) * radius;
+    glm::vec2 Bd = -Ad;
+    
+    static const int numCurveSegments = 32;
+    mesh.vertices.resize(1);
+    mesh.vertices.at(0) = position;
+    
+    glm::vec2 Sd = rotateVec2(Ad, M_PI_2);
+    glm::vec2 Td = rotateVec2(Bd, M_PI_2);
+    
+    float dirAngle = atan2f(direction.x, direction.y);
+    float start = glm::orientedAngle(direction, Ad) + dirAngle;
+    float end = glm::orientedAngle(direction, Bd) + dirAngle + 0.1f;
+    
+    std::vector<glm::vec2> curve = createArc(start, end, radius, 32, position);
+    mesh.vertices.insert(mesh.vertices.end(), curve.begin(), curve.end());
+    
+    std::vector<TriangeIndices> tris = createIndicesConvex2D(mesh.vertices.size());
+    mesh.indices.insert(mesh.indices.end(), tris.begin(), tris.end());
+    
+    return mesh;
+}
+
+ShapeMesh squareCap(glm::vec2 position, glm::vec2 direction, const float diameter) {
+    std::vector<glm::vec2> points {
+        position,
+        position + glm::normalize(direction) * diameter
+    };
+    return strokePolyline(points, diameter);
 }

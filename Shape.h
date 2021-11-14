@@ -133,5 +133,8 @@ std::vector<std::vector<glm::vec2>> dashedPolyline(std::vector<glm::vec2>& point
                                                    float dashLength, float gapLength,
                                                    float offset = 0.0f);
 
+ShapeMesh roundedCap(glm::vec2 position, glm::vec2 direction, const float diameter);
+ShapeMesh squareCap(glm::vec2 position, glm::vec2 direction, const float diameter);
+
 Shape CreateShapeFromMesh(Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice,
                           ShapeMesh& mesh);
