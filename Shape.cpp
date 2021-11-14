@@ -459,6 +459,29 @@ std::vector<glm::vec2> createArc(float startAngle, float endAngle, float radius,
     return arcVerts;
 }
 
+glm::vec2 rotateVec2(glm::vec2 v, float rad) {
+    return glm::vec2(v.x * sin(rad), v.y * cos(rad));
+}
+
+float positiveAngle(float angle) {
+    if(angle < 0) {
+        return M_PI * 2 + angle;
+    }
+    return angle;
+}
+
+bool isVec2BiggerThan(glm::vec2 a, glm::vec2 b) {
+    glm::vec2 v = a - b;
+    if(fabsf(v.x) > fabsf(v.y)) {
+        if(v.x > 0)
+            return true;
+    } else {
+        if(v.y < 0)
+            return true;
+    }
+    return false;
+}
+
 ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const float diameter) {
     float radius = diameter / 2.0f;
     ShapeMesh mesh;
@@ -494,6 +517,10 @@ ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
     else {
         start = atan2f(Bd.x, Bd.y);
         end = atan2f(Dd.x, Dd.y) + 0.1f;
+    }
+    if(isVec2BiggerThan(center, Ad)) {
+        start = positiveAngle(start);
+        end = positiveAngle(end);
     }
     curve = createArc(start, end, radius, 32, center);
     mesh.vertices.insert(mesh.vertices.end(), curve.begin(), curve.end());

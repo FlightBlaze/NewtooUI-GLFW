@@ -296,16 +296,69 @@ void App::draw()
     }
     std::vector<glm::vec2> points2 = {
         glm::vec2(90.0f, 120.0f),
-        glm::vec2(180.0f/* + cos(getTime()) * 150*/, 100.0f/* + sin(getTime()) * 100*/)
+        glm::vec2(180.0f + cos(getTime()) * 150, 100.0f + sin(getTime()) * 100)
     };
-    points2 = dividePolyline(points2, t).first;
+    // points2 = dividePolyline(points2, t).first;
     ShapeMesh mesh2 = strokePolyline(points2, 16);
     mesh.add(mesh2);
-    ShapeMesh join = miterJoin(points1, points2, 16);
+    ShapeMesh join = roundJoin(points1, points2, 16);
     mesh.add(join);
     Shape stroke = CreateShapeFromMesh(mDevice, mesh);
     mShapeRenderer->draw(mImmediateContext,
     glm::translate(mViewProjection, glm::vec3(100.0f, 100.0f, 0.0f)), stroke, glm::vec3(0.0f), 1.0f);
+    
+    {
+        std::vector<glm::vec2> line1 = {
+            glm::vec2(0.0f, 0.0f),
+            glm::vec2(80.0f, 110.0f)
+        };
+        std::vector<glm::vec2> line2 = {
+            glm::vec2(80.0f, 110.0f),
+            glm::vec2(-80.0f, 110.0f)
+        };
+        std::vector<glm::vec2> line3 = {
+            glm::vec2(-80.0f, 110.0f),
+            glm::vec2(0.0f, 0.0f)
+        };
+        float thickness = 16;
+        
+        ShapeMesh mesh1 = strokePolyline(line1, thickness);
+        ShapeMesh mesh2 = strokePolyline(line2, thickness);
+        ShapeMesh mesh3 = strokePolyline(line3, thickness);
+        
+        ShapeMesh join1;
+        ShapeMesh join2;
+        ShapeMesh join3;
+        
+        float time = getTime();
+        float timeCycle = 3;
+        float localTime = time - floorf(time / timeCycle) * timeCycle;
+        
+        if(localTime < 1) {
+            join1 = miterJoin(line1, line2, thickness);
+            join2 = miterJoin(line2, line3, thickness);
+            join3 = miterJoin(line3, line1, thickness);
+        } else if(localTime < 2) {
+            join1 = roundJoin(line1, line2, thickness);
+            join2 = roundJoin(line2, line3, thickness);
+            join3 = roundJoin(line3, line1, thickness);
+        } else if(localTime < 3) {
+            join1 = bevelJoin(line1, line2, thickness);
+            join2 = bevelJoin(line2, line3, thickness);
+            join3 = bevelJoin(line3, line1, thickness);
+        }
+            
+        mesh1.add(join1);
+        mesh1.add(mesh2);
+        mesh1.add(join2);
+        mesh1.add(mesh3);
+        mesh1.add(join3);
+        
+        Shape triangle = CreateShapeFromMesh(mDevice, mesh1);
+        mShapeRenderer->draw(mImmediateContext,
+        glm::translate(mViewProjection, glm::vec3(600.0f, 100.0f, 0.0f)), triangle, glm::vec3(0.0f), 1.0f);
+        
+    }
     
 	mSwapChain->Present();
 }

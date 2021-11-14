@@ -57,9 +57,9 @@ float crossProduct2D(glm::vec2 a, glm::vec2 b) {
     return a.x * b.y - a.y * b.x;
 }
 
-glm::vec2 rotateVec2(glm::vec2 v, float rad) {
-    return glm::vec2(v.x * sin(rad), v.y * cos(rad));
-}
+//glm::vec2 rotateVec2(glm::vec2 v, float rad) {
+//    return glm::vec2(v.x * sin(rad), v.y * cos(rad));
+//}
 
 float raySegmentIntersection(glm::vec2 rayOrigin, glm::vec2 rayDirection,
                              glm::vec2 lineStart, glm::vec2 lineEnd) {
