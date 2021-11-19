@@ -16,6 +16,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <backends/diligent.hh>
 
 struct Vertex {
     glm::vec3 pos;
@@ -103,6 +104,8 @@ public:
     std::shared_ptr<Shape> mSquircleShape;
     
     Context ctx;
+    
+    bvg::DiligentContext bvgCtx;
     
     void doUI();
 };

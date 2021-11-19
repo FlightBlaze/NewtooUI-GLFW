@@ -363,6 +363,24 @@ void App::draw()
         glm::translate(mViewProjection, glm::vec3(600.0f, 300.0f, 0.0f)), triangle, glm::vec3(0.0f), 1.0f);
     }
     
+    bvgCtx.orthographic(mWidth, mHeight);
+    
+    bvgCtx.beginPath();
+    bvgCtx.moveTo(200, 200 + 200);
+    bvgCtx.cubicTo(200, 150 + 200, 300, 150 + 200, 300, 200 + 200);
+    //bvgCtx.quadraticTo(300, 230, 250, 250);
+    bvgCtx.lineTo(250, 250 + 200);
+    // bvgCtx.closePath();
+    bvgCtx.lineWidth = 8.0f;
+    bvgCtx.lineDash = bvg::LineDash(12, 6);
+    bvgCtx.lineDash.offset = sin(getTime()) * 80.0f;
+    // bvgCtx.lineJoin = bvg::LineJoin::Round;
+    bvgCtx.lineCap = bvg::LineCap::Round;
+    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(1.0f, 0.1f, 0.1f));
+    bvgCtx.fillStyle = bvg::SolidColor(bvg::colors::White);
+    bvgCtx.convexFill();
+    bvgCtx.stroke();
+    
 	mSwapChain->Present();
 }
 
@@ -678,6 +696,11 @@ void App::initializeResources()
     ctx.context = mImmediateContext;
     ctx.renderDevice = mDevice;
     ctx.swapChain = mSwapChain;
+    
+    bvgCtx = bvg::DiligentContext(mWidth, mHeight, mDevice,
+                                  mImmediateContext,
+                                  mSwapChain->GetDesc().ColorBufferFormat,
+                                  mSwapChain->GetDesc().DepthBufferFormat);
 }
 
 void App::initializeFont() {

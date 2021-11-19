@@ -523,10 +523,6 @@ ShapeMesh roundJoin(std::vector<glm::vec2>& a, std::vector<glm::vec2>& b, const 
         end = atan2f(Dd.x, Dd.y) + 0.1f;
         up = Bd;
     }
-//    if(isVec2BiggerThan(center, Ad)) {
-//        start = positiveAngle(start);
-//        end = positiveAngle(end);
-//    }
     curve = createArc(start, end, radius, 32, center);
     
     // if arc is inverted

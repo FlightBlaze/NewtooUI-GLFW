@@ -19,3 +19,6 @@
 [submodule "submodules/SDL"]
 	path = submodules/SDL
 	url = https://github.com/libsdl-org/SDL.git
+[submodule "submodules/blazevg"]
+	path = submodules/blazevg
+	url = https://github.com/FlightBlaze/blazevg.git

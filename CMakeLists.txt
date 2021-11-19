@@ -126,3 +126,11 @@ target_link_libraries( MyProject
         NewtooUI )
 
 # TODO: Add tests and install targets if needed.
+
+# blazevg
+
+add_subdirectory("submodules/blazevg")
+target_include_directories( MyProject PRIVATE
+        "submodules/blazevg/include" )
+target_link_libraries( MyProject
+        blazevg )
