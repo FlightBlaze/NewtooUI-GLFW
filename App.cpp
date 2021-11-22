@@ -165,70 +165,70 @@ void App::draw()
 	mImmediateContext->ClearDepthStencil(pDSV, Diligent::CLEAR_DEPTH_FLAG, 1.f, 0,
 		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-	Diligent::Uint64   offset = 0;
-	Diligent::IBuffer* pBuffs[] = { mQuadVertexBuffer };
-	mImmediateContext->SetVertexBuffers(0, 1, pBuffs, &offset,
-		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-		Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
-	mImmediateContext->SetIndexBuffer(mQuadIndexBuffer, 0,
-		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-	mImmediateContext->SetPipelineState(mPSO);
-
-	mImmediateContext->CommitShaderResources(mSRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-	Diligent::DrawIndexedAttribs DrawAttrs;
-	DrawAttrs.IndexType = Diligent::VT_UINT32;
-	DrawAttrs.NumIndices = _countof(QuadIndices);
-	DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
-
-	float speed = fabsf(mQuadPosX.velocity);
-	std::vector<float>* kernel = nullptr;
-	if (speed > 110)
-		kernel = &GaussianKernel5x1;
-	if (speed > 190)
-		kernel = &GaussianKernel9x1;
-	if (speed > 250)
-		kernel = &GaussianKernel15x1;
-	if (speed > 380)
-		kernel = &GaussianKernel31x1;
-	if (kernel != nullptr) {
-		glm::vec2 blurDirection = glm::vec2(1.0f, 0.0f);
-		int kernelSize = (int)kernel->size();
-		int kernelCenter = kernelSize / 2;
-		for (int i = 0; i < kernelSize; i++) {
-			float offset = (float)(i - kernelCenter);
-			float stepPx = 1.0f;
-			glm::vec2 resolution = glm::vec2(mWidth, mHeight);
-			glm::vec3 offsetInDirection = glm::vec3(glm::vec2(blurDirection * offset * stepPx) / resolution, 0.0f);
-			glm::mat4 MVP = glm::translate(offsetInDirection) * mModelViewProjection;
-			// Write model view projection matrix to uniform
-			{
-				Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
-					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-				*CBConstants = glm::transpose(MVP);
-			}
-			{
-				Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
-					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-				*CBConstants = kernel->at(i);
-			}
-			mImmediateContext->DrawIndexed(DrawAttrs);
-		}
-	}
-	else {
-		{
-			Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
-				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-			*CBConstants = glm::transpose(mModelViewProjection);
-		}
-		{
-			Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
-				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-			*CBConstants = 1.0f; // opacity
-		}
-		mImmediateContext->DrawIndexed(DrawAttrs);
-	}
+//	Diligent::Uint64   offset = 0;
+//	Diligent::IBuffer* pBuffs[] = { mQuadVertexBuffer };
+//	mImmediateContext->SetVertexBuffers(0, 1, pBuffs, &offset,
+//		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+//		Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
+//	mImmediateContext->SetIndexBuffer(mQuadIndexBuffer, 0,
+//		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+//
+//	mImmediateContext->SetPipelineState(mPSO);
+//
+//	mImmediateContext->CommitShaderResources(mSRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+//
+//	Diligent::DrawIndexedAttribs DrawAttrs;
+//	DrawAttrs.IndexType = Diligent::VT_UINT32;
+//	DrawAttrs.NumIndices = _countof(QuadIndices);
+//	DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
+//
+//	float speed = fabsf(mQuadPosX.velocity);
+//	std::vector<float>* kernel = nullptr;
+//	if (speed > 110)
+//		kernel = &GaussianKernel5x1;
+//	if (speed > 190)
+//		kernel = &GaussianKernel9x1;
+//	if (speed > 250)
+//		kernel = &GaussianKernel15x1;
+//	if (speed > 380)
+//		kernel = &GaussianKernel31x1;
+//	if (kernel != nullptr) {
+//		glm::vec2 blurDirection = glm::vec2(1.0f, 0.0f);
+//		int kernelSize = (int)kernel->size();
+//		int kernelCenter = kernelSize / 2;
+//		for (int i = 0; i < kernelSize; i++) {
+//			float offset = (float)(i - kernelCenter);
+//			float stepPx = 1.0f;
+//			glm::vec2 resolution = glm::vec2(mWidth, mHeight);
+//			glm::vec3 offsetInDirection = glm::vec3(glm::vec2(blurDirection * offset * stepPx) / resolution, 0.0f);
+//			glm::mat4 MVP = glm::translate(offsetInDirection) * mModelViewProjection;
+//			// Write model view projection matrix to uniform
+//			{
+//				Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
+//					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+//				*CBConstants = glm::transpose(MVP);
+//			}
+//			{
+//				Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
+//					Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+//				*CBConstants = kernel->at(i);
+//			}
+//			mImmediateContext->DrawIndexed(DrawAttrs);
+//		}
+//	}
+//	else {
+//		{
+//			Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
+//				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+//			*CBConstants = glm::transpose(mModelViewProjection);
+//		}
+//		{
+//			Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
+//				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+//			*CBConstants = 1.0f; // opacity
+//		}
+//		mImmediateContext->DrawIndexed(DrawAttrs);
+//	}
     
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     
@@ -281,103 +281,31 @@ void App::draw()
     mTextRenderer->draw(mImmediateContext,
         glm::translate(mViewProjection, glm::vec3(glm::vec2(10.0f, 10.0f), 0.0f)), FPS, 16.0f);
     
-    float t = 0.5f + sinf(getTime()) / 2.0f;
-    
-    std::vector<glm::vec2> points1 = {
-        glm::vec2(0.0f, 0.0f),
-        glm::vec2(40.0f, 70.0f),
-        glm::vec2(90.0f, 120.0f)
-    };
-    auto lines1 = dashedPolyline(points1, 24.0f, 12.0f, sin(getTime()) * 80.0f);
-    ShapeMesh mesh;
-    for(auto line : lines1) {
-        ShapeMesh strokeMesh = strokePolyline(line, 16);
-        mesh.add(strokeMesh);
-    }
-    std::vector<glm::vec2> points2 = {
-        glm::vec2(90.0f, 120.0f),
-        glm::vec2(180.0f + cos(getTime()) * 150, 100.0f + sin(getTime()) * 100)
-    };
-    // points2 = dividePolyline(points2, t).first;
-    ShapeMesh mesh2 = strokePolyline(points2, 16);
-    mesh.add(mesh2);
-    ShapeMesh join = roundJoin(points1, points2, 16);
-    mesh.add(join);
-    ShapeMesh cap1 = roundedCap(points2.back(),
-                                points2[points2.size() - 1] - points2[points2.size() - 2],
-                                16);
-    mesh.add(cap1);
-    Shape stroke = CreateShapeFromMesh(mDevice, mesh);
-    mShapeRenderer->draw(mImmediateContext,
-    glm::translate(mViewProjection, glm::vec3(100.0f, 100.0f, 0.0f)), stroke, glm::vec3(0.0f), 1.0f);
-    
-    {
-        std::vector<glm::vec2> line1 = {
-            glm::vec2(0.0f, 0.0f),
-            glm::vec2(80.0f, 110.0f)
-        };
-        std::vector<glm::vec2> line2 = {
-            glm::vec2(80.0f, 110.0f),
-            glm::vec2(-80.0f, 110.0f)
-        };
-        std::vector<glm::vec2> line3 = {
-            glm::vec2(-80.0f, 110.0f),
-            glm::vec2(0.0f, 0.0f)
-        };
-        float thickness = 16;
-        
-        ShapeMesh mesh1 = strokePolyline(line1, thickness);
-        ShapeMesh mesh2 = strokePolyline(line2, thickness);
-        ShapeMesh mesh3 = strokePolyline(line3, thickness);
-        
-        ShapeMesh join1;
-        ShapeMesh join2;
-        ShapeMesh join3;
-        
-        float time = getTime();
-        float timeCycle = 3;
-        float localTime = time - floorf(time / timeCycle) * timeCycle;
-        
-        if(localTime < 1) {
-            join1 = miterJoin(line1, line2, thickness);
-            join2 = miterJoin(line2, line3, thickness);
-            join3 = miterJoin(line3, line1, thickness);
-        } else if(localTime < 2) {
-            join1 = roundJoin(line1, line2, thickness);
-            join2 = roundJoin(line2, line3, thickness);
-            join3 = roundJoin(line3, line1, thickness);
-        } else if(localTime < 3) {
-            join1 = bevelJoin(line1, line2, thickness);
-            join2 = bevelJoin(line2, line3, thickness);
-            join3 = bevelJoin(line3, line1, thickness);
-        }
-            
-        mesh1.add(join1);
-        mesh1.add(mesh2);
-        mesh1.add(join2);
-        mesh1.add(mesh3);
-        mesh1.add(join3);
-        
-        Shape triangle = CreateShapeFromMesh(mDevice, mesh1);
-        mShapeRenderer->draw(mImmediateContext,
-        glm::translate(mViewProjection, glm::vec3(600.0f, 300.0f, 0.0f)), triangle, glm::vec3(0.0f), 1.0f);
-    }
-    
     bvgCtx.orthographic(mWidth, mHeight);
+    bvgCtx.clearTransform();
+    bvgCtx.contentScale = mScale;
     
     bvgCtx.beginPath();
-    bvgCtx.moveTo(200, 200 + 200);
-    bvgCtx.cubicTo(200, 150 + 200, 300, 150 + 200, 300, 200 + 200);
-    //bvgCtx.quadraticTo(300, 230, 250, 250);
-    bvgCtx.lineTo(250, 250 + 200);
-    // bvgCtx.closePath();
+    bvgCtx.moveTo(-50, 50);
+    bvgCtx.cubicTo(-50, 0, 50, 0, 50, 50);
+    bvgCtx.lineTo(0, 100);
+    bvgCtx.closePath();
+    
     bvgCtx.lineWidth = 8.0f;
     bvgCtx.lineDash = bvg::LineDash(12, 6);
     bvgCtx.lineDash.offset = sin(getTime()) * 80.0f;
-    // bvgCtx.lineJoin = bvg::LineJoin::Round;
-    bvgCtx.lineCap = bvg::LineCap::Round;
-    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(1.0f, 0.1f, 0.1f));
-    bvgCtx.fillStyle = bvg::SolidColor(bvg::colors::White);
+//    bvgCtx.lineJoin = bvg::LineJoin::Round;
+//    bvgCtx.lineCap = bvg::LineCap::Round;
+    bvgCtx.strokeStyle = bvg::LinearGradient(0, 0, 0, 100,
+                                             bvg::Color(0.3f, 0.3f, 1.0f, 0.5f),
+                                             bvg::Color(1.0f, 0.1f, 0.1f, 1.0f));
+    bvgCtx.fillStyle = bvg::LinearGradient(-50, 20, 50, 100,
+                                           bvg::colors::Black,
+                                           bvg::colors::White);
+//    bvgCtx.matrix = glm::translate(glm::mat3(1.0f), glm::vec2(200, 100)) *
+//        glm::rotate(glm::mat3(1.0f), mRotation);
+    bvgCtx.rotate(mRotation);
+    bvgCtx.translate(200, 100);
     bvgCtx.convexFill();
     bvgCtx.stroke();
     
@@ -453,6 +381,7 @@ void App::initializeDiligentEngine()
 	#ifdef PLATFORM_MACOS
 	Diligent::MacOSNativeWindow window;
 	window.pNSView = setupLayersAndGetView(wmi.info.cocoa.window);
+    mScale = getViewScale(window.pNSView);
 
 	// We need at least 3 buffers in Metal to avoid massive
     // performance degradation in full screen mode.

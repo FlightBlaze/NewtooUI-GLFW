@@ -13,3 +13,9 @@ void* setupLayersAndGetView(void* window) {
     [nsview setWantsLayer:YES];
     return nsview;
 }
+
+float getViewScale(void* view) {
+    id nsview = (NSView*)view;
+    CGSize viewScale = [nsview convertSizeToBacking: CGSizeMake(1.0, 1.0)];
+    return MIN(viewScale.width, viewScale.height);
+}
