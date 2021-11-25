@@ -1,4 +1,4 @@
-# CMakeList.txt : Top-level CMake project file, do global configuration
+﻿# CMakeList.txt : Top-level CMake project file, do global configuration
 # and include sub-projects here.
 #
 cmake_minimum_required (VERSION 3.8)
@@ -21,6 +21,7 @@ target_include_directories(MyProject PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 # Copy assets to the binary directory
 
 if( APPLE )
+        file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}/assets/)
         file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/assets/)
 else()
         file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/assets/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/assets/)

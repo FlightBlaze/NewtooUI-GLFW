@@ -296,9 +296,9 @@ void App::draw()
     bvgCtx.lineDash.offset = sin(getTime()) * 80.0f;
 //    bvgCtx.lineJoin = bvg::LineJoin::Round;
 //    bvgCtx.lineCap = bvg::LineCap::Round;
-    bvgCtx.strokeStyle = bvg::LinearGradient(0, 0, 0, 100,
-                                             bvg::Color(0.3f, 0.3f, 1.0f, 0.5f),
-                                             bvg::Color(1.0f, 0.1f, 0.1f, 1.0f));
+//    bvgCtx.strokeStyle = bvg::LinearGradient(0, 0, 0, 100,
+//                                             bvg::Color(0.3f, 0.3f, 1.0f, 0.5f),
+//                                             bvg::Color(1.0f, 0.1f, 0.1f, 1.0f));
     bvgCtx.fillStyle = bvg::LinearGradient(-50, 20, 50, 100,
                                            bvg::colors::Black,
                                            bvg::colors::White);
@@ -307,6 +307,36 @@ void App::draw()
     bvgCtx.rotate(mRotation);
     bvgCtx.translate(200, 100);
     bvgCtx.convexFill();
+    bvgCtx.stroke();
+    
+    bvg::Color red = bvg::Color(1.0f, 0.2f, 0.2f);
+    bvg::Color blue = bvg::Color(0.2f, 0.2f, 1.0f);
+    
+    bvgCtx.clearTransform();
+    bvgCtx.rotate(mRotation);
+    bvgCtx.translate(400, 100);
+    bvgCtx.font = bvgCtx.fonts["roboto-regular"];
+    bvgCtx.fontSize = sinf(getTime()) / 2.0f * 40.0f + 40.0f;
+    bvgCtx.fillStyle = bvg::LinearGradient(0, 0, 0, bvgCtx.font->lineHeight,
+                                           red,
+                                           blue);
+    bvgCtx.textFill(L"Привет мир!", 0, 0);
+    
+    bvgCtx.clearTransform();
+    bvgCtx.translate(200, 400);
+    bvgCtx.beginPath();
+    bvgCtx.moveTo(0, 0);
+    bvgCtx.cubicTo(50, -100, 100, 0, 200, 0);
+    bvgCtx.cubicTo(230, -50, 450, 50, 500, 0);
+    // bvgCtx.closePath();
+    bvgCtx.lineDash = bvg::LineDash(8, 4);
+    bvgCtx.fontSize = 32;
+    
+    float t = (sin(getTime()) + 1.0f) / 2.0f;
+    bvgCtx.fillStyle = bvg::SolidColor(bvg::Color::lerp(red, blue, t));
+    
+    bvgCtx.textFillOnPath(L"Lorem ipsum dolor sit amet", sin(getTime()) * 80.0f + 80.0f, -4.0f);
+    bvgCtx.lineWidth = 2.0f;
     bvgCtx.stroke();
     
 	mSwapChain->Present();
@@ -630,6 +660,14 @@ void App::initializeResources()
                                   mImmediateContext,
                                   mSwapChain->GetDesc().ColorBufferFormat,
                                   mSwapChain->GetDesc().DepthBufferFormat);
+    
+    std::string fontJson = LoadTextResource("Roboto/Roboto-Regular.json");
+    
+    int width, height, numChannels;
+    unsigned char* imageData = stbi_load("assets/Roboto/Roboto-Regular.png",
+                                         &width, &height, &numChannels, 0);
+    bvgCtx.loadFontFromMemory(fontJson, "roboto-regular", imageData, width, height, numChannels);
+    stbi_image_free(imageData);
 }
 
 void App::initializeFont() {
