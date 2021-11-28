@@ -286,28 +286,34 @@ void App::draw()
     bvgCtx.contentScale = mScale;
     
     bvgCtx.beginPath();
-    bvgCtx.moveTo(-50, 50);
-    bvgCtx.cubicTo(-50, 0, 50, 0, 50, 50);
-    bvgCtx.lineTo(0, 100);
+//    bvgCtx.moveTo(-50, 50);
+//    bvgCtx.cubicTo(-50, 0, 50, 0, 50, 50);
+//    bvgCtx.lineTo(0, 100);
+    bvgCtx.moveTo(-50, 0);
+    bvgCtx.lineTo(50, 0);
+    bvgCtx.lineTo(50, 100);
+    bvgCtx.lineTo(0, 50);
+    bvgCtx.lineTo(-50, 100);
+    bvgCtx.lineTo(-50, 0);
     bvgCtx.closePath();
     
     bvgCtx.lineWidth = 8.0f;
     bvgCtx.lineDash = bvg::LineDash(12, 6);
     bvgCtx.lineDash.offset = sin(getTime()) * 80.0f;
-//    bvgCtx.lineJoin = bvg::LineJoin::Round;
-//    bvgCtx.lineCap = bvg::LineCap::Round;
-//    bvgCtx.strokeStyle = bvg::LinearGradient(0, 0, 0, 100,
-//                                             bvg::Color(0.3f, 0.3f, 1.0f, 0.5f),
-//                                             bvg::Color(1.0f, 0.1f, 0.1f, 1.0f));
+    bvgCtx.lineJoin = bvg::LineJoin::Bevel;
+    bvgCtx.lineCap = bvg::LineCap::Butt;
+    bvgCtx.strokeStyle = bvg::LinearGradient(0, 0, 0, 100,
+                                             bvg::Color(0.3f, 0.3f, 1.0f, 0.5f),
+                                             bvg::Color(1.0f, 0.1f, 0.1f, 1.0f));
     bvgCtx.fillStyle = bvg::LinearGradient(-50, 20, 50, 100,
                                            bvg::colors::Black,
                                            bvg::colors::White);
-//    bvgCtx.matrix = glm::translate(glm::mat3(1.0f), glm::vec2(200, 100)) *
-//        glm::rotate(glm::mat3(1.0f), mRotation);
     bvgCtx.rotate(mRotation);
     bvgCtx.translate(200, 100);
-    bvgCtx.convexFill();
+    bvgCtx.fill();
     bvgCtx.stroke();
+    
+    bvgCtx.lineJoin = bvg::LineJoin::Miter;
     
     bvg::Color red = bvg::Color(1.0f, 0.2f, 0.2f);
     bvg::Color blue = bvg::Color(0.2f, 0.2f, 1.0f);
@@ -337,6 +343,60 @@ void App::draw()
     
     bvgCtx.textFillOnPath(L"Lorem ipsum dolor sit amet", sin(getTime()) * 80.0f + 80.0f, -4.0f);
     bvgCtx.lineWidth = 2.0f;
+    bvgCtx.strokeStyle = bvg::SolidColor(bvg::colors::White);
+    bvgCtx.stroke();
+    
+    bvgCtx.clearTransform();
+    bvgCtx.translate(600, 450);
+    bvgCtx.beginPath();
+    bvgCtx.lineTo(70, 100);
+    bvgCtx.lineTo(-70, 100);
+    bvgCtx.closePath();
+    bvgCtx.lineDash = bvg::LineDash();
+    bvgCtx.fillStyle = bvg::ConicGradient(0, 60, getTime() * 3.0f,
+                                          red,
+                                          blue);
+    bvgCtx.convexFill();
+    bvgCtx.lineWidth = 8;
+    bvgCtx.strokeStyle = bvg::RadialGradient(0, 60, 140,
+                                             red,
+                                             blue);
+    bvgCtx.stroke();
+    
+    bvgCtx.clearTransform();
+    float fastTime = getTime() * 3.0f;
+    bvgCtx.rotate(fastTime);
+    bvgCtx.translate(400, 500);
+    bvgCtx.beginPath();
+    bvgCtx.arc(0.0f, 0.0f, 25.0f, M_PI / 3.0f, M_PI);
+    bvgCtx.lineDash = bvg::LineDash();
+    bvgCtx.lineWidth = 8;
+    bvgCtx.lineCap = bvg::LineCap::Round;
+    bvgCtx.strokeStyle = bvg::ConicGradient(0, 0, 0.1f,
+                                            red,
+                                            blue);
+    bvgCtx.stroke();
+    
+    bvgCtx.clearTransform();
+    bvgCtx.translate(250, 500);
+    bvgCtx.beginPath();
+    bvgCtx.arc(0.0f, 0.0f, 50.0f, -2.0f, 3.0f);
+    bvgCtx.lineTo(0, 0);
+    bvgCtx.closePath();
+    bvgCtx.fillStyle = bvg::SolidColor(bvg::Color(1.0f, 0.7f, 0.1f));
+    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(1.0f, 0.2f, 0.1f));
+    bvgCtx.lineWidth = 4;
+    bvgCtx.fill();
+    bvgCtx.stroke();
+    
+    bvgCtx.clearTransform();
+    bvgCtx.translate(30, 400);
+    bvgCtx.beginPath();
+    bvgCtx.rect(0, 0, 100, 60, 12);
+    bvgCtx.fillStyle = bvg::SolidColor(bvg::Color(0.1f, 0.8f, 0.1f));
+    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(0.0f, 0.5f, 0.0f));
+    // bvgCtx.lineDash = bvg::LineDash(8, 4);
+    bvgCtx.convexFill();
     bvgCtx.stroke();
     
 	mSwapChain->Present();
