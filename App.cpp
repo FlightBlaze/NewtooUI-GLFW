@@ -284,6 +284,7 @@ void App::draw()
     bvgCtx.orthographic(mWidth, mHeight);
     bvgCtx.clearTransform();
     bvgCtx.contentScale = mScale;
+    bvgCtx.beginDrawing();
     
     bvgCtx.beginPath();
 //    bvgCtx.moveTo(-50, 50);
@@ -356,11 +357,12 @@ void App::draw()
     bvgCtx.fillStyle = bvg::ConicGradient(0, 60, getTime() * 3.0f,
                                           red,
                                           blue);
-    bvgCtx.convexFill();
-    bvgCtx.lineWidth = 8;
-    bvgCtx.strokeStyle = bvg::RadialGradient(0, 60, 140,
-                                             red,
-                                             blue);
+    // bvgCtx.convexFill();
+    bvgCtx.lineWidth = 18;
+//    bvgCtx.strokeStyle = bvg::RadialGradient(0, 60, 140,
+//                                             red,
+//                                             blue);
+    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(0.0f, 0.0f, 0.0f, 0.5f));
     bvgCtx.stroke();
     
     bvgCtx.clearTransform();
@@ -398,6 +400,8 @@ void App::draw()
     // bvgCtx.lineDash = bvg::LineDash(8, 4);
     bvgCtx.convexFill();
     bvgCtx.stroke();
+    
+    bvgCtx.endDrawing();
     
 	mSwapChain->Present();
 }
