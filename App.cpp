@@ -357,12 +357,12 @@ void App::draw()
     bvgCtx.fillStyle = bvg::ConicGradient(0, 60, getTime() * 3.0f,
                                           red,
                                           blue);
-    // bvgCtx.convexFill();
+    bvgCtx.convexFill();
     bvgCtx.lineWidth = 18;
-//    bvgCtx.strokeStyle = bvg::RadialGradient(0, 60, 140,
-//                                             red,
-//                                             blue);
-    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(0.0f, 0.0f, 0.0f, 0.5f));
+    bvgCtx.strokeStyle = bvg::RadialGradient(0, 60, 140,
+                                             red,
+                                             blue);
+//    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(0.0f, 0.0f, 0.0f, 0.5f));
     bvgCtx.stroke();
     
     bvgCtx.clearTransform();
@@ -370,13 +370,14 @@ void App::draw()
     bvgCtx.rotate(fastTime);
     bvgCtx.translate(400, 500);
     bvgCtx.beginPath();
-    bvgCtx.arc(0.0f, 0.0f, 25.0f, M_PI / 3.0f, M_PI);
+    bvgCtx.arc(0.0f, 0.0f, 25.0f, 0, M_PI * 1.5f);
     bvgCtx.lineDash = bvg::LineDash();
     bvgCtx.lineWidth = 8;
     bvgCtx.lineCap = bvg::LineCap::Round;
-    bvgCtx.strokeStyle = bvg::ConicGradient(0, 0, 0.1f,
+    bvg::Color blueTransparent = bvg::Color(0.2f, 0.2f, 1.0f, 0.0f);
+    bvgCtx.strokeStyle = bvg::ConicGradient(0, 0, M_PI_2 + 0.3f,
                                             red,
-                                            blue);
+                                            blueTransparent);
     bvgCtx.stroke();
     
     bvgCtx.clearTransform();
