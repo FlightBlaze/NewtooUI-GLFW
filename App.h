@@ -2,7 +2,6 @@
 
 #include <MyProject.h>
 #include <Diligent.h>
-#include <DualRenderTarget.h>
 #include <RenderTarget.h>
 #include <TextRenderer.h>
 #include <Shape.h>
@@ -16,7 +15,9 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <thread>
 #include <backends/diligent.hh>
+#include <Gizmos.h>
 
 struct Vertex {
     glm::vec3 pos;
@@ -36,7 +37,8 @@ public:
     void resize(int width, int height);
 
     App();
-
+    virtual ~App();
+    
     // static void errorCallback(int error, const char* description);
     // static void resizeCallback(GLFWwindow* window, int width, int height);
     // static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
@@ -82,7 +84,6 @@ private:
     Diligent::RefCntAutoPtr<Diligent::IBuffer> mMotionBlurConstants;
     Diligent::RefCntAutoPtr<Diligent::IShader> mMotionBlurPS;
     Diligent::RefCntAutoPtr<Diligent::IShader> mPrintPS;
-    DualRenderTarget mRenderTargets;
 
     ui::SpringPhysicalProperties mQuadPhysicalProps;
     ui::Spring mQuadPosX;
@@ -95,6 +96,14 @@ private:
     int mLastFPS = 0;
     int mFPS = 0;
     int mLastRaycasts = 0;
+    
+    RenderTarget renderTarget;
+    
+    void recreateRenderTargets();
+    
+    float mPitch = 0.0f;
+    float mYaw = 0.0f;
+    
 public:
     glm::vec2 mSquirclePos;
     Shape mSquircleFill;

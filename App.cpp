@@ -21,6 +21,7 @@ extern "C" {
 #include "Graphics/GraphicsTools/interface/MapHelper.hpp"
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/matrix_transform_2d.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <stb_image.h>
 #include <unistd.h>
 #include <codecvt>
@@ -87,16 +88,16 @@ int App::run()
 			case SDL_MOUSEBUTTONDOWN:
 				if(currentEvent.button.button == SDL_BUTTON_LEFT) {
 					if(currentEvent.button.state == SDL_PRESSED) {
-						int x = currentEvent.button.x;
-						int y = currentEvent.button.y;
-						glm::vec2 relativePoint = mSquircleFill.offset +
-							glm::vec2((float)x, (float)y) - mSquirclePos;
-						bool isInside = mSquircleFill.containsPoint(relativePoint);
-						std::cout << "Is inside squircle: " << isInside << std::endl;
+//						int x = currentEvent.button.x;
+//						int y = currentEvent.button.y;
+//						glm::vec2 relativePoint = mSquircleFill.offset +
+//							glm::vec2((float)x, (float)y) - mSquirclePos;
+//						bool isInside = mSquircleFill.containsPoint(relativePoint);
+//						std::cout << "Is inside squircle: " << isInside << std::endl;
+//                        redrawRay = true;
+//                        rayX = x;
+//                        rayY = y;
                         isMouseDown = true;
-                        redrawRay = true;
-                        rayX = x;
-                        rayY = y;
                     }
 				}
 				break;
@@ -109,6 +110,8 @@ int App::run()
                     redrawRay = true;
                     rayX = currentEvent.motion.x;
                     rayY = currentEvent.motion.y;
+                    mYaw -= glm::radians((float)currentEvent.motion.xrel) * 25.0f;
+                    mPitch += glm::radians((float)currentEvent.motion.yrel) * 25.0f;
                 }
                 break;
 			default:
@@ -116,31 +119,31 @@ int App::run()
 			}
 		}
         
-        if(redrawRay) {
-            glm::vec2 rayOrigin = glm::vec2((float)rayX, (float)rayY);
-            glm::vec2 rayDir = glm::vec2(0.0f, 1.0f);
-            
-            glm::vec2 relativePoint = mSquircleFill.offset +
-                rayOrigin - mSquirclePos;
-            
-            float intersectionDistance = mSquircleFill.intersectsRay(relativePoint, rayDir);
-            float endY = mHeight;
-            if(intersectionDistance != NoIntersection) {
-                glm::vec2 intersectionPoint = relativePoint + rayDir * intersectionDistance -
-                    mSquircleFill.offset + mSquirclePos;
-                float absoluteIntersectionDistance = glm::distance(intersectionPoint, rayOrigin);
-                endY = intersectionPoint.y;
-            }
-            
-            tube::Path path;
-            path.points = {
-                tube::Point(glm::vec3(rayX, rayY, 0.0f)),
-                tube::Point(glm::vec3(rayX, endY, 0.0f))
-            };
-            tube::Builder builder = tube::Builder(path).withShape(tube::Shapes::circle(2.0f, 4));
-            
-            mRayStroke = CreateStroke(mDevice, builder);
-        }
+//        if(redrawRay) {
+//            glm::vec2 rayOrigin = glm::vec2((float)rayX, (float)rayY);
+//            glm::vec2 rayDir = glm::vec2(0.0f, 1.0f);
+//
+//            glm::vec2 relativePoint = mSquircleFill.offset +
+//                rayOrigin - mSquirclePos;
+//
+//            float intersectionDistance = mSquircleFill.intersectsRay(relativePoint, rayDir);
+//            float endY = mHeight;
+//            if(intersectionDistance != NoIntersection) {
+//                glm::vec2 intersectionPoint = relativePoint + rayDir * intersectionDistance -
+//                    mSquircleFill.offset + mSquirclePos;
+//                float absoluteIntersectionDistance = glm::distance(intersectionPoint, rayOrigin);
+//                endY = intersectionPoint.y;
+//            }
+//
+//            tube::Path path;
+//            path.points = {
+//                tube::Point(glm::vec3(rayX, rayY, 0.0f)),
+//                tube::Point(glm::vec3(rayX, endY, 0.0f))
+//            };
+//            tube::Builder builder = tube::Builder(path).withShape(tube::Shapes::circle(2.0f, 4));
+//
+//            mRayStroke = CreateStroke(mDevice, builder);
+//        }
         
 		update();
 		draw();
@@ -155,14 +158,14 @@ void App::draw()
 	const float ClearColor[] = { 0.5f,  0.5f,  0.5f, 1.0f };
 	const float Transparent[] = { 0.0f,  0.0f,  0.0f, 0.0f };
 
-	auto* pRTV = mSwapChain->GetCurrentBackBufferRTV();
-	auto* pDSV = mSwapChain->GetDepthBufferDSV();
-
-	mImmediateContext->SetRenderTargets(1, &pRTV, pDSV,
+	Diligent::ITextureView* pRTV = mSwapChain->GetCurrentBackBufferRTV();
+    Diligent::ITextureView* pDSV = mSwapChain->GetDepthBufferDSV();
+    
+	mImmediateContext->SetRenderTargets(1, &renderTarget.RTV, renderTarget.DSV,
 		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	mImmediateContext->ClearRenderTarget(pRTV, ClearColor,
+	mImmediateContext->ClearRenderTarget(renderTarget.RTV, ClearColor,
 		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	mImmediateContext->ClearDepthStencil(pDSV, Diligent::CLEAR_DEPTH_FLAG, 1.f, 0,
+	mImmediateContext->ClearDepthStencil(renderTarget.DSV, Diligent::CLEAR_DEPTH_FLAG, 1.f, 0,
 		Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
 //	Diligent::Uint64   offset = 0;
@@ -183,6 +186,7 @@ void App::draw()
 //	DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
 //
 //	float speed = fabsf(mQuadPosX.velocity);
+//    speed = 0;
 //	std::vector<float>* kernel = nullptr;
 //	if (speed > 110)
 //		kernel = &GaussianKernel5x1;
@@ -217,17 +221,20 @@ void App::draw()
 //		}
 //	}
 //	else {
-//		{
-//			Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
-//				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-//			*CBConstants = glm::transpose(mModelViewProjection);
-//		}
-//		{
-//			Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
-//				Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-//			*CBConstants = 1.0f; // opacity
-//		}
-//		mImmediateContext->DrawIndexed(DrawAttrs);
+//        for(int i = 0; i < 3600; i++) {
+//            glm::mat4 MVP = mModelViewProjection * glm::translate(glm::vec3(i, 0, 0));
+//            {
+//                Diligent::MapHelper<glm::mat4> CBConstants(mImmediateContext, mVSConstants,
+//                    Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+//                *CBConstants = glm::transpose(MVP);
+//            }
+//            {
+//                Diligent::MapHelper<float> CBConstants(mImmediateContext, mPSConstants,
+//                    Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+//                *CBConstants = 1.0f; // opacity
+//            }
+//            mImmediateContext->DrawIndexed(DrawAttrs);
+//        }
 //	}
     
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
@@ -277,134 +284,200 @@ void App::draw()
 //    ctx.currentPass = ContextPass::DRAW;
 //    doUI();
     
-    std::wstring FPS = L"FPS: " + converter.from_bytes(std::to_string(mLastFPS).c_str()) + L", raycasts per frame: " + converter.from_bytes(std::to_string(mLastRaycasts).c_str());
-    mTextRenderer->draw(mImmediateContext,
-        glm::translate(mViewProjection, glm::vec3(glm::vec2(10.0f, 10.0f), 0.0f)), FPS, 16.0f);
+    std::wstring FPS = L"FPS: " + converter.from_bytes(std::to_string(mLastFPS).c_str());
+//    mTextRenderer->draw(mImmediateContext,
+//        glm::translate(mViewProjection, glm::vec3(glm::vec2(10.0f, 10.0f), 0.0f)), FPS, 16.0f);
     
     bvgCtx.orthographic(mWidth, mHeight);
     bvgCtx.clearTransform();
     bvgCtx.contentScale = mScale;
+    
+    Diligent::SwapChainDesc SCDesc = mSwapChain->GetDesc();
+    
+    bvgCtx.setupPipelineStates(SCDesc.ColorBufferFormat, SCDesc.DepthBufferFormat, 2);
+    
     bvgCtx.beginDrawing();
     
-    bvgCtx.beginPath();
-//    bvgCtx.moveTo(-50, 50);
-//    bvgCtx.cubicTo(-50, 0, 50, 0, 50, 50);
-//    bvgCtx.lineTo(0, 100);
-    bvgCtx.moveTo(-50, 0);
-    bvgCtx.lineTo(50, 0);
-    bvgCtx.lineTo(50, 100);
-    bvgCtx.lineTo(0, 50);
-    bvgCtx.lineTo(-50, 100);
-    bvgCtx.lineTo(-50, 0);
-    bvgCtx.closePath();
-    
-    bvgCtx.lineWidth = 8.0f;
-    bvgCtx.lineDash = bvg::LineDash(12, 6);
-    bvgCtx.lineDash.offset = sin(getTime()) * 80.0f;
-    bvgCtx.lineJoin = bvg::LineJoin::Bevel;
-    bvgCtx.lineCap = bvg::LineCap::Butt;
-    bvgCtx.strokeStyle = bvg::LinearGradient(0, 0, 0, 100,
-                                             bvg::Color(0.3f, 0.3f, 1.0f, 0.5f),
-                                             bvg::Color(1.0f, 0.1f, 0.1f, 1.0f));
-    bvgCtx.fillStyle = bvg::LinearGradient(-50, 20, 50, 100,
-                                           bvg::colors::Black,
-                                           bvg::colors::White);
-    bvgCtx.rotate(mRotation);
-    bvgCtx.translate(200, 100);
-    bvgCtx.fill();
-    bvgCtx.stroke();
-    
-    bvgCtx.lineJoin = bvg::LineJoin::Miter;
-    
-    bvg::Color red = bvg::Color(1.0f, 0.2f, 0.2f);
-    bvg::Color blue = bvg::Color(0.2f, 0.2f, 1.0f);
-    
-    bvgCtx.clearTransform();
-    bvgCtx.rotate(mRotation);
-    bvgCtx.translate(400, 100);
     bvgCtx.font = bvgCtx.fonts["roboto-regular"];
-    bvgCtx.fontSize = sinf(getTime()) / 2.0f * 40.0f + 40.0f;
-    bvgCtx.fillStyle = bvg::LinearGradient(0, 0, 0, bvgCtx.font->lineHeight,
-                                           red,
-                                           blue);
-    bvgCtx.textFill(L"Привет мир!", 0, 0);
+    
+    float zoom = 15.0f;
+    float eyeX = sin(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * zoom;
+    float eyeY = sin(glm::radians(mPitch)) * zoom;
+    float eyeZ = cos(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * zoom;
+    glm::vec3 eye = glm::vec3(eyeX, eyeY, eyeZ);
+    
+    float normalizedPitch = degreesInRange(mPitch);
+    bool flipY = normalizedPitch < 90.0f || normalizedPitch >= 270.0f;
+    glm::vec3 up = glm::vec3(0.0, flipY ? 1.0 : -1.0, 0.0);
+    
+    glm::mat4 vp = glm::perspective(90.0f, (float)mWidth / (float)mHeight, 0.001f, 100.0f) *
+        glm::lookAt(eye, glm::vec3(0.0f), up);
+    
+    drawGizmos(bvgCtx, vp, eye);
+    
+//    bvgCtx.beginPath();
+////    bvgCtx.moveTo(-50, 50);
+////    bvgCtx.cubicTo(-50, 0, 50, 0, 50, 50);
+////    bvgCtx.lineTo(0, 100);
+//    bvgCtx.moveTo(-50, 0);
+//    bvgCtx.lineTo(50, 0);
+//    bvgCtx.lineTo(50, 100);
+//    bvgCtx.lineTo(0, 50);
+//    bvgCtx.lineTo(-50, 100);
+//    bvgCtx.lineTo(-50, 0);
+//    bvgCtx.closePath();
+//
+//    bvgCtx.lineWidth = 8.0f;
+//    bvgCtx.lineDash = bvg::LineDash(12, 6);
+//    bvgCtx.lineDash.offset = sin(getTime()) * 80.0f;
+//    bvgCtx.lineJoin = bvg::LineJoin::Bevel;
+//    bvgCtx.lineCap = bvg::LineCap::Butt;
+//    bvgCtx.strokeStyle = bvg::LinearGradient(0, 0, 0, 100,
+//                                             bvg::Color(0.3f, 0.3f, 1.0f, 0.5f),
+//                                             bvg::Color(1.0f, 0.1f, 0.1f, 1.0f));
+//    bvgCtx.fillStyle = bvg::LinearGradient(-50, 20, 50, 100,
+//                                           bvg::colors::Black,
+//                                           bvg::colors::White);
+//    bvgCtx.rotate(mRotation);
+//    bvgCtx.translate(200, 100);
+//    bvgCtx.fill();
+//    bvgCtx.stroke();
+//
+//    bvgCtx.lineJoin = bvg::LineJoin::Miter;
+//
+//    bvg::Color red = bvg::Color(1.0f, 0.2f, 0.2f);
+//    bvg::Color blue = bvg::Color(0.2f, 0.2f, 1.0f);
+//
+//    float timeZeroOne = (sinf(getTime()) + 1.0f) / 2.0f;
+//
+//
+////    for(float i = 0; i < 360.0f + 1.0f; i++) {
+////        bvgCtx.clearTransform();
+////        bvgCtx.rotate(mRotation + glm::radians(i));
+////        bvgCtx.translate(400, 100);
+////        bvgCtx.fontSize = sinf(getTime()) / 2.0f * 40.0f + 40.0f;
+////        bvg::Color col = bvg::Color(0.2f, i / 360.0f, 1.0f);
+//////        bvgCtx.fillStyle = bvg::LinearGradient(0, 0, 0, bvgCtx.font->lineHeight,
+//////                                               red,
+//////                                               col);
+////        bvgCtx.fillStyle = bvg::SolidColor(col);
+////        bvgCtx.textFill(L"Привет мир!", 0, 0);
+////    }
+//
+//    bvgCtx.clearTransform();
+//    bvgCtx.translate(200, 400);
+//    bvgCtx.beginPath();
+//    bvgCtx.moveTo(0, 0);
+//    bvgCtx.cubicTo(50, -100, 100, 0, 200, 0);
+//    bvgCtx.cubicTo(230, -50, 450, 50, 500, 0);
+//    // bvgCtx.closePath();
+//    bvgCtx.lineDash = bvg::LineDash(8, 4);
+//    bvgCtx.fontSize = 32;
+//
+//    float t = (sin(getTime()) + 1.0f) / 2.0f;
+//    bvgCtx.fillStyle = bvg::SolidColor(bvg::Color::lerp(red, blue, t));
+//
+//    bvgCtx.textFillOnPath(L"Lorem ipsum dolor sit amet", sin(getTime()) * 80.0f + 80.0f, -4.0f);
+//    bvgCtx.lineWidth = 2.0f;
+//    bvgCtx.strokeStyle = bvg::SolidColor(bvg::colors::White);
+//    bvgCtx.stroke();
+//
+//    bvgCtx.clearTransform();
+//    bvgCtx.translate(600, 450);
+//    bvgCtx.beginPath();
+//    bvgCtx.lineTo(70, 100);
+//    bvgCtx.lineTo(-70, 100);
+//    bvgCtx.closePath();
+//    bvgCtx.lineDash = bvg::LineDash();
+//    bvgCtx.fillStyle = bvg::ConicGradient(0, 60, getTime() * 3.0f,
+//                                          red,
+//                                          blue);
+//    bvgCtx.convexFill();
+//    bvgCtx.lineWidth = 18;
+//    bvgCtx.strokeStyle = bvg::RadialGradient(0, 60, 140,
+//                                             red,
+//                                             blue);
+//
+//    float time = getTime();
+//    float timeCycle = 3;
+//    float timeWithinCycle = time - floorf(time / timeCycle) * timeCycle;
+//
+//    if(timeWithinCycle < 1.0f)
+//        bvgCtx.lineJoin = bvg::LineJoin::Miter;
+//    else if(timeWithinCycle < 2.0f)
+//        bvgCtx.lineJoin = bvg::LineJoin::Round;
+//    else
+//        bvgCtx.lineJoin = bvg::LineJoin::Bevel;
+//
+////    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(0.0f, 0.0f, 0.0f, 0.5f));
+//    bvgCtx.stroke();
+//
+//    bvgCtx.clearTransform();
+//    float fastTime = getTime() * 3.0f;
+//    bvgCtx.rotate(fastTime);
+//    bvgCtx.translate(400, 500);
+//    bvgCtx.beginPath();
+//    bvgCtx.arc(0.0f, 0.0f, 25.0f, -0.7f, M_PI * 1.5f);
+//    bvgCtx.lineDash = bvg::LineDash();
+//    bvgCtx.lineWidth = 8;
+//    bvgCtx.lineCap = bvg::LineCap::Round;
+//    bvg::Color blueTransparent = bvg::Color(0.2f, 0.2f, 1.0f, 0.0f);
+//    bvgCtx.strokeStyle = bvg::ConicGradient(0, 0, M_PI_2 + 0.3f,
+//                                            red,
+//                                            blueTransparent);
+//    bvgCtx.stroke();
+//
+//    bvgCtx.clearTransform();
+//    bvgCtx.translate(250, 500);
+//    bvgCtx.beginPath();
+//    bvgCtx.arc(0.0f, 0.0f, 50.0f, -2.0f, 3.0f);
+//    bvgCtx.lineTo(0, 0);
+//    bvgCtx.closePath();
+//    bvgCtx.fillStyle = bvg::SolidColor(bvg::Color(1.0f, 0.7f, 0.1f));
+//    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(1.0f, 0.2f, 0.1f));
+//    bvgCtx.lineWidth = 4;
+//    bvgCtx.fill();
+//    bvgCtx.stroke();
+//
+////    for(int i = 0; i < 360; i++) {
+////        bvgCtx.clearTransform();
+////        bvgCtx.rotate(glm::radians((float)i));
+////        bvgCtx.translate(30, 400);
+////        bvgCtx.beginPath();
+////        bvgCtx.rect(0, 0, 100, 60, 12);
+////        bvgCtx.fillStyle = bvg::SolidColor(bvg::Color(0.1f, 0.8f, 0.1f));
+////        bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(0.0f, 0.5f, 0.0f));
+////        // bvgCtx.lineDash = bvg::LineDash(8, 4);
+////        bvgCtx.convexFill();
+////        bvgCtx.stroke();
+////    }
     
     bvgCtx.clearTransform();
-    bvgCtx.translate(200, 400);
-    bvgCtx.beginPath();
-    bvgCtx.moveTo(0, 0);
-    bvgCtx.cubicTo(50, -100, 100, 0, 200, 0);
-    bvgCtx.cubicTo(230, -50, 450, 50, 500, 0);
-    // bvgCtx.closePath();
-    bvgCtx.lineDash = bvg::LineDash(8, 4);
-    bvgCtx.fontSize = 32;
-    
-    float t = (sin(getTime()) + 1.0f) / 2.0f;
-    bvgCtx.fillStyle = bvg::SolidColor(bvg::Color::lerp(red, blue, t));
-    
-    bvgCtx.textFillOnPath(L"Lorem ipsum dolor sit amet", sin(getTime()) * 80.0f + 80.0f, -4.0f);
-    bvgCtx.lineWidth = 2.0f;
-    bvgCtx.strokeStyle = bvg::SolidColor(bvg::colors::White);
-    bvgCtx.stroke();
-    
-    bvgCtx.clearTransform();
-    bvgCtx.translate(600, 450);
-    bvgCtx.beginPath();
-    bvgCtx.lineTo(70, 100);
-    bvgCtx.lineTo(-70, 100);
-    bvgCtx.closePath();
-    bvgCtx.lineDash = bvg::LineDash();
-    bvgCtx.fillStyle = bvg::ConicGradient(0, 60, getTime() * 3.0f,
-                                          red,
-                                          blue);
-    bvgCtx.convexFill();
-    bvgCtx.lineWidth = 18;
-    bvgCtx.strokeStyle = bvg::RadialGradient(0, 60, 140,
-                                             red,
-                                             blue);
-//    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(0.0f, 0.0f, 0.0f, 0.5f));
-    bvgCtx.stroke();
-    
-    bvgCtx.clearTransform();
-    float fastTime = getTime() * 3.0f;
-    bvgCtx.rotate(fastTime);
-    bvgCtx.translate(400, 500);
-    bvgCtx.beginPath();
-    bvgCtx.arc(0.0f, 0.0f, 25.0f, 0, M_PI * 1.5f);
-    bvgCtx.lineDash = bvg::LineDash();
-    bvgCtx.lineWidth = 8;
-    bvgCtx.lineCap = bvg::LineCap::Round;
-    bvg::Color blueTransparent = bvg::Color(0.2f, 0.2f, 1.0f, 0.0f);
-    bvgCtx.strokeStyle = bvg::ConicGradient(0, 0, M_PI_2 + 0.3f,
-                                            red,
-                                            blueTransparent);
-    bvgCtx.stroke();
-    
-    bvgCtx.clearTransform();
-    bvgCtx.translate(250, 500);
-    bvgCtx.beginPath();
-    bvgCtx.arc(0.0f, 0.0f, 50.0f, -2.0f, 3.0f);
-    bvgCtx.lineTo(0, 0);
-    bvgCtx.closePath();
-    bvgCtx.fillStyle = bvg::SolidColor(bvg::Color(1.0f, 0.7f, 0.1f));
-    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(1.0f, 0.2f, 0.1f));
-    bvgCtx.lineWidth = 4;
-    bvgCtx.fill();
-    bvgCtx.stroke();
-    
-    bvgCtx.clearTransform();
-    bvgCtx.translate(30, 400);
-    bvgCtx.beginPath();
-    bvgCtx.rect(0, 0, 100, 60, 12);
-    bvgCtx.fillStyle = bvg::SolidColor(bvg::Color(0.1f, 0.8f, 0.1f));
-    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(0.0f, 0.5f, 0.0f));
-    // bvgCtx.lineDash = bvg::LineDash(8, 4);
-    bvgCtx.convexFill();
-    bvgCtx.stroke();
+    bvgCtx.translate(12, 12);
+    bvgCtx.fontSize = 16;
+    bvgCtx.fillStyle = bvg::SolidColor(bvg::colors::Black);
+    bvgCtx.textFill(FPS, 0, 0);
     
     bvgCtx.endDrawing();
+     
+    Diligent::ResolveTextureSubresourceAttribs ResolveAttribs;
+    ResolveAttribs.SrcTextureTransitionMode =
+        Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+    ResolveAttribs.DstTextureTransitionMode =
+        Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION;
+    Diligent::TextureDesc TDesc = pRTV->GetTexture()->GetDesc();
+    if(TDesc.Width != mWidth * mScale || TDesc.Height != mHeight * mScale)
+        return;
+    mImmediateContext->ResolveTextureSubresource(renderTarget.color, pRTV->GetTexture(),
+                                                 ResolveAttribs);
     
 	mSwapChain->Present();
+    
+//    Diligent::StateTransitionDesc STDesc;
+//    STDesc.pResource = renderTarget.color;
+//    STDesc.OldState = Diligent::RESOURCE_STATE_SHADER_RESOURCE;
+//    STDesc.NewState = Diligent::RESOURCE_STATE_RENDER_TARGET;
+//    mImmediateContext->TransitionResourceStates(1, &STDesc);
 }
 
 void App::update()
@@ -453,15 +526,8 @@ void App::update()
 
 void App::resize(int width, int height)
 {
+    recreateRenderTargets();
 	mSwapChain->Resize(width, height);
-
-	// RenderTargetCreateInfo renderTargetCI;
-	// renderTargetCI.device = mDevice;
-	// renderTargetCI.swapChain = mSwapChain;
-	// renderTargetCI.width = width;
-	// renderTargetCI.height = height;
-	// mRenderTargets.current->recreateTextures(renderTargetCI);
-	// mRenderTargets.previous->recreateTextures(renderTargetCI);
 }
 
 void App::initializeDiligentEngine()
@@ -556,6 +622,7 @@ void App::initializeResources()
 	Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
 	PSOCreateInfo.PSODesc.Name = "Simple triangle PSO";
 	PSOCreateInfo.PSODesc.PipelineType = Diligent::PIPELINE_TYPE_GRAPHICS;
+    PSOCreateInfo.GraphicsPipeline.SmplDesc.Count = 2;
 	PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
 	PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = mSwapChain->GetDesc().ColorBufferFormat;
 	PSOCreateInfo.GraphicsPipeline.DSVFormat = mSwapChain->GetDesc().DepthBufferFormat;
@@ -650,8 +717,7 @@ void App::initializeResources()
 	mPSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->Set(mVSConstants);
 	mPSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants")->Set(mPSConstants);
 	mPSO->CreateShaderResourceBinding(&mSRB, true);
-
-	
+    
 	// Render target creation
 
 
@@ -724,7 +790,8 @@ void App::initializeResources()
     bvgCtx = bvg::DiligentContext(mWidth, mHeight, mDevice,
                                   mImmediateContext,
                                   mSwapChain->GetDesc().ColorBufferFormat,
-                                  mSwapChain->GetDesc().DepthBufferFormat);
+                                  mSwapChain->GetDesc().DepthBufferFormat,
+                                  2);
     
     std::string fontJson = LoadTextResource("Roboto/Roboto-Regular.json");
     
@@ -733,6 +800,15 @@ void App::initializeResources()
                                          &width, &height, &numChannels, 0);
     bvgCtx.loadFontFromMemory(fontJson, "roboto-regular", imageData, width, height, numChannels);
     stbi_image_free(imageData);
+    
+    recreateRenderTargets();
+}
+
+void App::recreateRenderTargets() {
+    Diligent::SwapChainDesc SCDesc = mSwapChain->GetDesc();
+    
+    renderTarget = RenderTarget(mDevice, SCDesc.ColorBufferFormat,
+                                SCDesc.DepthBufferFormat, mWidth * mScale, mHeight * mScale, 2);
 }
 
 void App::initializeFont() {
@@ -788,4 +864,8 @@ void App::doUI() {
         endBoundary(ctx);
     }
     endAffine(ctx);
+}
+
+App::~App()
+{
 }

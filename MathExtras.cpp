@@ -130,3 +130,12 @@ glm::mat4 toMatrix3D(glm::mat3 mat2d)
 	mat3d[1][3] = ty;
 	return mat3d;
 }
+
+float degreesInRange(float deg) {
+    float rdeg = fabsf(deg);
+    float fullCycles = floorf(rdeg / 360.0f);
+    rdeg -= fullCycles * 360.0f;
+    if (deg < 0.0f)
+        rdeg = 360.0f - rdeg;
+    return rdeg;
+}
