@@ -104,6 +104,9 @@ private:
     float mPitch = 0.0f;
     float mYaw = 0.0f;
     
+    float mMouseX = 0.0f,
+        mMouseY = 0.0f;
+    
 public:
     glm::vec2 mSquirclePos;
     Shape mSquircleFill;

@@ -9,4 +9,5 @@
 
 #include <blazevg.hh>
 
-void drawGizmos(bvg::Context& ctx, glm::mat4 viewproj, glm::vec3 eye, glm::vec3 target);
+void drawGizmos(bvg::Context& ctx, glm::mat4 viewproj, glm::vec3 eye, glm::vec3 target,
+                bool isMouseDown, float mouseX, float mouseY);

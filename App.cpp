@@ -106,6 +106,8 @@ int App::run()
                     isMouseDown = false;
                 }
             case SDL_MOUSEMOTION:
+                mMouseX = currentEvent.motion.x;
+                mMouseY = currentEvent.motion.y;
                 if(isMouseDown) {
                     redrawRay = true;
                     rayX = currentEvent.motion.x;
@@ -313,7 +315,7 @@ void App::draw()
     glm::mat4 vp = glm::perspective(90.0f, (float)mWidth / (float)mHeight, 0.001f, 100.0f) *
         glm::lookAt(eye, glm::vec3(0.0f), up);
     
-    drawGizmos(bvgCtx, vp, eye, glm::vec3(0.0f));
+    drawGizmos(bvgCtx, vp, eye, glm::vec3(0.0f), isMouseDown, mMouseX, mMouseY);
     
 //    bvgCtx.beginPath();
 ////    bvgCtx.moveTo(-50, 50);

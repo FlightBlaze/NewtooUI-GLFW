@@ -13,6 +13,7 @@ void drawArrow(bvg::Context& ctx, float sx, float sy, float ex, float ey, float 
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.lineTo(ex, ey);
+    ctx.stroke();
     glm::vec2 endPos = glm::vec2(ex, ey);
     glm::vec2 endDir = glm::normalize(glm::vec2(ex - sx, ey - sy));
     glm::vec2 endLeft = glm::vec2(endDir.y, -endDir.x);
@@ -20,11 +21,33 @@ void drawArrow(bvg::Context& ctx, float sx, float sy, float ex, float ey, float 
     glm::vec2 A = endLeft * size + endPos;
     glm::vec2 B = endDir * size * 1.667f + endPos;
     glm::vec2 C = endRight * size + endPos;
-    ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(A.x, A.y);
     ctx.lineTo(B.x, B.y);
     ctx.lineTo(C.x, C.y);
+    ctx.closePath();
+    ctx.convexFill();
+}
+
+void drawLineWithSquare(bvg::Context& ctx, float sx, float sy, float ex, float ey, float size) {
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    glm::vec2 endPos = glm::vec2(ex, ey);
+    glm::vec2 endDir = glm::normalize(glm::vec2(ex - sx, ey - sy));
+    glm::vec2 endLeft = glm::vec2(endDir.y, -endDir.x);
+    glm::vec2 endRight = -endLeft;
+    glm::vec2 endAdvancePos = endDir * size * 1.667f + endPos;
+    glm::vec2 A = endLeft * size + endPos;
+    glm::vec2 B = endRight * size + endPos;
+    glm::vec2 C = endRight * size + endAdvancePos;
+    glm::vec2 D = endLeft * size + endAdvancePos;
+    ctx.beginPath();
+    ctx.moveTo(A.x, A.y);
+    ctx.lineTo(B.x, B.y);
+    ctx.lineTo(C.x, C.y);
+    ctx.lineTo(D.x, D.y);
     ctx.closePath();
     ctx.convexFill();
 }
@@ -56,6 +79,14 @@ void drawGizmoCenter(bvg::Context& ctx, glm::mat4& viewproj,
     ctx.beginPath();
     ctx.arc(centerS.x, centerS.y, 16.0f, 0.0f, M_PI * 2.0f);
     ctx.convexFill();
+}
+
+bool isMouseOverGizmoCenter(bvg::Context& ctx, glm::mat4& viewproj,
+                            glm::vec3 center, glm::vec2 mouse) {
+    glm::vec2 centerS = worldToScreenSpace(ctx, center, viewproj);
+    ctx.beginPath();
+    ctx.arc(centerS.x, centerS.y, 16.0f, 0.0f, M_PI * 2.0f);
+    return ctx.isPointInsideConvexFill(mouse.x, mouse.y);
 }
 
 void drawGizmoPlane(bvg::Context& ctx, glm::mat4& viewproj,
@@ -98,6 +129,7 @@ public:
     Drawing();
     
     virtual void draw(bvg::Context& ctx);
+    virtual bool mouseEvent(bvg::Context& ctx, bool isMouseDown, float mouseX, float mouseY);
     
     DrawingType type = DrawingType::Other;
     float distanceToEye = 0;
@@ -109,6 +141,10 @@ Drawing::Drawing()
 
 void Drawing::draw(bvg::Context& ctx)
 {
+}
+
+bool Drawing::mouseEvent(bvg::Context& ctx, bool isMouseDown, float mouseX, float mouseY) {
+    return false;
 }
 
 class PlaneDrawing : public Drawing {
@@ -172,7 +208,7 @@ color(color)
     glm::vec3 arrowDir = glm::normalize(end - origin);
     glm::vec3 viewDir = glm::normalize(target - eye);
     float codir = 1.0f - fabsf(glm::dot(arrowDir, viewDir));
-    this->color.a = fminf(codir * 16.0f, 1.0f);
+    this->color.a = fminf(codir * 20.0f, 1.0f);
     
     type = DrawingType::Arrow;
     glm::vec3 center = (origin + end) / 2.0f;
@@ -194,6 +230,7 @@ public:
     bvg::Color color;
     
     void draw(bvg::Context& ctx);
+    bool mouseEvent(bvg::Context& ctx, bool isMouseDown, float mouseX, float mouseY);
 };
 
 CenterDrawing::CenterDrawing(glm::mat4& viewproj,
@@ -209,6 +246,14 @@ color(color)
 
 void CenterDrawing::draw(bvg::Context& ctx) {
     drawGizmoCenter(ctx, viewproj, center, color);
+}
+
+bool CenterDrawing::mouseEvent(bvg::Context& ctx, bool isMouseDown, float mouseX, float mouseY) {
+    if(isMouseOverGizmoCenter(ctx, viewproj, center, glm::vec2(mouseX, mouseY))) {
+        this->color = bvg::Color::lerp(this->color, bvg::colors::White, 0.5f);
+        return true;
+    }
+    return false;
 }
 
 struct DrawingWrapper {
@@ -236,7 +281,9 @@ bool DrawingWrapper::operator > (const DrawingWrapper& other) const {
     return this->drawing->distanceToEye > other.drawing->distanceToEye;
 }
 
-void drawGizmos(bvg::Context& ctx, glm::mat4 viewproj, glm::vec3 eye, glm::vec3 target) {
+void drawGizmos(bvg::Context& ctx, glm::mat4 viewproj, glm::vec3 eye, glm::vec3 target,
+                bool isMouseDown, float mouseX, float mouseY)
+{
     float arrowLength = 5.0f;
     float planeSize = 1.0f;
     float planeDistance = 3.0f;
@@ -271,6 +318,13 @@ void drawGizmos(bvg::Context& ctx, glm::mat4 viewproj, glm::vec3 eye, glm::vec3 
     };
     
     std::sort(drawings.begin(), drawings.end(), std::greater<DrawingWrapper>());
+    
+    // From nearest to farest
+    for(int i = drawings.size() - 1; i >= 0; i--) {
+        Drawing* drawing = drawings.at(i).drawing;
+        if(drawing->mouseEvent(ctx, isMouseDown, mouseX, mouseY))
+            break;
+    }
     
     for(auto drawingw : drawings)
         drawingw.drawing->draw(ctx);
