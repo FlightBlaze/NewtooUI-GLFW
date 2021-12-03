@@ -5,8 +5,9 @@
 //  Created by Dmitry on 03.12.2021.
 //
 
-#include "Gizmos.h"
+#include <Gizmos.h>
 #include <glm/gtx/transform.hpp>
+#include <iostream>
 
 void drawArrow(bvg::Context& ctx, float sx, float sy, float ex, float ey, float size) {
     ctx.beginPath();
@@ -79,7 +80,7 @@ void drawGizmoPlane(bvg::Context& ctx, glm::mat4& viewproj,
     ctx.closePath();
     ctx.lineWidth = 4.0f;
     bvg::Color fillColor = color;
-    fillColor.a = 0.5f;
+    fillColor.a *= 0.5f;
     ctx.fillStyle = bvg::SolidColor(fillColor);
     ctx.strokeStyle = bvg::SolidColor(color);
     ctx.fill();
@@ -113,7 +114,8 @@ void Drawing::draw(bvg::Context& ctx)
 class PlaneDrawing : public Drawing {
 public:
     PlaneDrawing(glm::mat4& viewproj, glm::mat4& model,
-                 bvg::Color color, glm::vec3 eye);
+                 bvg::Color color, glm::vec3 eye,
+                 glm::vec3 target);
     
     glm::mat4& viewproj;
     glm::mat4& model;
@@ -123,12 +125,19 @@ public:
 };
 
 PlaneDrawing::PlaneDrawing(glm::mat4& viewproj, glm::mat4& model,
-                           bvg::Color color, glm::vec3 eye):
+                           bvg::Color color, glm::vec3 eye,
+                           glm::vec3 target):
 viewproj(viewproj),
 model(model),
 color(color)
 {
     glm::vec3 center = model * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    glm::vec3 centerUp = model * glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+    glm::vec3 planeDir = glm::normalize(centerUp - center);
+    glm::vec3 viewDir = glm::normalize(target - eye);
+    float codir = fabsf(glm::dot(planeDir, viewDir));
+    this->color.a = fminf(codir * 4.0f, 1.0f);
+    
     this->distanceToEye = glm::distance(center, eye);
 }
 
@@ -140,7 +149,8 @@ class ArrowDrawing : public Drawing {
 public:
     ArrowDrawing(glm::mat4& viewproj,
                  glm::vec3 origin, glm::vec3 end,
-                 bvg::Color color, glm::vec3 eye);
+                 bvg::Color color, glm::vec3 eye,
+                 glm::vec3 target);
     
     glm::mat4& viewproj;
     glm::vec3 origin;
@@ -152,12 +162,18 @@ public:
 
 ArrowDrawing::ArrowDrawing(glm::mat4& viewproj,
                            glm::vec3 origin, glm::vec3 end,
-                           bvg::Color color, glm::vec3 eye):
+                           bvg::Color color, glm::vec3 eye,
+                           glm::vec3 target):
 viewproj(viewproj),
 origin(origin),
 end(end),
 color(color)
 {
+    glm::vec3 arrowDir = glm::normalize(end - origin);
+    glm::vec3 viewDir = glm::normalize(target - eye);
+    float codir = 1.0f - fabsf(glm::dot(arrowDir, viewDir));
+    this->color.a = fminf(codir * 16.0f, 1.0f);
+    
     type = DrawingType::Arrow;
     glm::vec3 center = (origin + end) / 2.0f;
     this->distanceToEye = glm::distance(center, eye);
@@ -220,7 +236,7 @@ bool DrawingWrapper::operator > (const DrawingWrapper& other) const {
     return this->drawing->distanceToEye > other.drawing->distanceToEye;
 }
 
-void drawGizmos(bvg::Context& ctx, glm::mat4 viewproj, glm::vec3 eye) {
+void drawGizmos(bvg::Context& ctx, glm::mat4 viewproj, glm::vec3 eye, glm::vec3 target) {
     float arrowLength = 5.0f;
     float planeSize = 1.0f;
     float planeDistance = 3.0f;
@@ -245,12 +261,12 @@ void drawGizmos(bvg::Context& ctx, glm::mat4 viewproj, glm::vec3 eye) {
         glm::scale(glm::vec3(planeSize));
     
     std::vector<DrawingWrapper> drawings {
-        DrawingWrapper(new ArrowDrawing(viewproj, center, XArrowEnd, XColor, eye)),
-        DrawingWrapper(new ArrowDrawing(viewproj, center, YArrowEnd, YColor, eye)),
-        DrawingWrapper(new ArrowDrawing(viewproj, center, ZArrowEnd, ZColor, eye)),
-        DrawingWrapper(new PlaneDrawing(viewproj, XPlaneMat, XColor, eye)),
-        DrawingWrapper(new PlaneDrawing(viewproj, YPlaneMat, YColor, eye)),
-        DrawingWrapper(new PlaneDrawing(viewproj, ZPlaneMat, ZColor, eye)),
+        DrawingWrapper(new ArrowDrawing(viewproj, center, XArrowEnd, XColor, eye, target)),
+        DrawingWrapper(new ArrowDrawing(viewproj, center, YArrowEnd, YColor, eye, target)),
+        DrawingWrapper(new ArrowDrawing(viewproj, center, ZArrowEnd, ZColor, eye, target)),
+        DrawingWrapper(new PlaneDrawing(viewproj, XPlaneMat, XColor, eye, target)),
+        DrawingWrapper(new PlaneDrawing(viewproj, YPlaneMat, YColor, eye, target)),
+        DrawingWrapper(new PlaneDrawing(viewproj, ZPlaneMat, ZColor, eye, target)),
         DrawingWrapper(new CenterDrawing(viewproj, center, centerColor, eye))
     };
     

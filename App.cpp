@@ -313,7 +313,7 @@ void App::draw()
     glm::mat4 vp = glm::perspective(90.0f, (float)mWidth / (float)mHeight, 0.001f, 100.0f) *
         glm::lookAt(eye, glm::vec3(0.0f), up);
     
-    drawGizmos(bvgCtx, vp, eye);
+    drawGizmos(bvgCtx, vp, eye, glm::vec3(0.0f));
     
 //    bvgCtx.beginPath();
 ////    bvgCtx.moveTo(-50, 50);
