@@ -107,6 +107,9 @@ private:
     float mMouseX = 0.0f,
         mMouseY = 0.0f;
     
+    glm::mat4 mModel = glm::mat4(1.0f);
+    GizmoState mGizmoState;
+    
 public:
     glm::vec2 mSquirclePos;
     Shape mSquircleFill;

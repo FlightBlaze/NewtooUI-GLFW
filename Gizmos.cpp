@@ -7,6 +7,7 @@
 
 #include <Gizmos.h>
 #include <glm/gtx/transform.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 #include <iostream>
 
 void drawArrow(bvg::Context& ctx, float sx, float sy, float ex, float ey, float size) {
@@ -128,8 +129,9 @@ class Drawing {
 public:
     Drawing();
     
-    virtual void draw(bvg::Context& ctx);
-    virtual bool mouseEvent(bvg::Context& ctx, bool isMouseDown, float mouseX, float mouseY);
+    virtual void draw(bvg::Context& ctx, GizmoState& state);
+    virtual bool mouseEvent(bvg::Context& ctx, GizmoState& state, glm::mat4& model,
+                            bool isMouseDown, float mouseX, float mouseY);
     
     DrawingType type = DrawingType::Other;
     float distanceToEye = 0;
@@ -139,11 +141,12 @@ Drawing::Drawing()
 {
 }
 
-void Drawing::draw(bvg::Context& ctx)
+void Drawing::draw(bvg::Context& ctx, GizmoState& state)
 {
 }
 
-bool Drawing::mouseEvent(bvg::Context& ctx, bool isMouseDown, float mouseX, float mouseY) {
+bool Drawing::mouseEvent(bvg::Context& ctx, GizmoState& state, glm::mat4& model,
+                         bool isMouseDown, float mouseX, float mouseY) {
     return false;
 }
 
@@ -157,7 +160,7 @@ public:
     glm::mat4& model;
     bvg::Color color;
     
-    void draw(bvg::Context& ctx);
+    void draw(bvg::Context& ctx, GizmoState& state);
 };
 
 PlaneDrawing::PlaneDrawing(glm::mat4& viewproj, glm::mat4& model,
@@ -177,7 +180,7 @@ color(color)
     this->distanceToEye = glm::distance(center, eye);
 }
 
-void PlaneDrawing::draw(bvg::Context& ctx) {
+void PlaneDrawing::draw(bvg::Context& ctx, GizmoState& state) {
     drawGizmoPlane(ctx, viewproj, model, color);
 }
 
@@ -193,7 +196,7 @@ public:
     glm::vec3 end;
     bvg::Color color;
     
-    void draw(bvg::Context& ctx);
+    void draw(bvg::Context& ctx, GizmoState& state);
 };
 
 ArrowDrawing::ArrowDrawing(glm::mat4& viewproj,
@@ -215,7 +218,7 @@ color(color)
     this->distanceToEye = glm::distance(center, eye);
 }
 
-void ArrowDrawing::draw(bvg::Context& ctx) {
+void ArrowDrawing::draw(bvg::Context& ctx, GizmoState& state) {
     drawGizmoArrow(ctx, viewproj, origin, end, color);
 }
 
@@ -229,8 +232,9 @@ public:
     glm::vec3 center;
     bvg::Color color;
     
-    void draw(bvg::Context& ctx);
-    bool mouseEvent(bvg::Context& ctx, bool isMouseDown, float mouseX, float mouseY);
+    void draw(bvg::Context& ctx, GizmoState& state);
+    bool mouseEvent(bvg::Context& ctx, GizmoState& state, glm::mat4& model,
+                    bool isMouseDown, float mouseX, float mouseY);
 };
 
 CenterDrawing::CenterDrawing(glm::mat4& viewproj,
@@ -244,13 +248,32 @@ color(color)
     this->distanceToEye = glm::distance(this->center, eye);
 }
 
-void CenterDrawing::draw(bvg::Context& ctx) {
-    drawGizmoCenter(ctx, viewproj, center, color);
+void CenterDrawing::draw(bvg::Context& ctx, GizmoState& state) {
+    bvg::Color currentColor = this->color;
+    if(state.selectedControl == Control::Center) {
+        currentColor = bvg::Color::lerp(this->color, bvg::colors::White, 0.5f);
+    }
+    drawGizmoCenter(ctx, viewproj, center, currentColor);
 }
 
-bool CenterDrawing::mouseEvent(bvg::Context& ctx, bool isMouseDown, float mouseX, float mouseY) {
+bool CenterDrawing::mouseEvent(bvg::Context& ctx, GizmoState& state, glm::mat4& model,
+                               bool isMouseDown, float mouseX, float mouseY) {
+    if(state.selectedControl == Control::Center) {
+        float relX = mouseX - state.lastMouseX;
+        float relY = mouseY - state.lastMouseY;
+        glm::vec3 move = state.viewUp * -relY + state.viewRight * -relX;
+        move *= 0.088f;
+        model = glm::translate(move) * model;
+    }
+    
     if(isMouseOverGizmoCenter(ctx, viewproj, center, glm::vec2(mouseX, mouseY))) {
-        this->color = bvg::Color::lerp(this->color, bvg::colors::White, 0.5f);
+        if(!isMouseDown) {
+            state.controlOverMouse = Control::Center;
+            return true;
+        }
+        if(state.controlOverMouse == Control::Center) {
+            state.selectedControl = Control::Center;
+        }
         return true;
     }
     return false;
@@ -281,9 +304,18 @@ bool DrawingWrapper::operator > (const DrawingWrapper& other) const {
     return this->drawing->distanceToEye > other.drawing->distanceToEye;
 }
 
-void drawGizmos(bvg::Context& ctx, glm::mat4 viewproj, glm::vec3 eye, glm::vec3 target,
+void drawGizmos(bvg::Context& ctx,  GizmoState& state,
+                glm::mat4 viewproj, glm::mat4& model,
+                glm::vec3 eye, glm::vec3 target, glm::vec3 up,
                 bool isMouseDown, float mouseX, float mouseY)
 {
+    glm::vec3 scale;
+    glm::quat rotation;
+    glm::vec3 translation;
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    glm::decompose(model, scale, rotation, translation, skew, perspective);
+    
     float arrowLength = 5.0f;
     float planeSize = 1.0f;
     float planeDistance = 3.0f;
@@ -291,21 +323,37 @@ void drawGizmos(bvg::Context& ctx, glm::mat4 viewproj, glm::vec3 eye, glm::vec3 
     glm::vec3 XArrowEnd = glm::vec3(1.0f, 0.0f, 0.0f) * arrowLength;
     glm::vec3 YArrowEnd = glm::vec3(0.0f, 1.0f, 0.0f) * arrowLength;
     glm::vec3 ZArrowEnd = glm::vec3(0.0f, 0.0f, 1.0f) * arrowLength;
+    center = translation + center;
+    XArrowEnd = translation + XArrowEnd;
+    YArrowEnd = translation + YArrowEnd;
+    ZArrowEnd = translation + ZArrowEnd;
     bvg::Color XColor = bvg::Color(1.0f, 0.2f, 0.2f);
     bvg::Color YColor = bvg::Color(0.2f, 1.0f, 0.2f);
     bvg::Color ZColor = bvg::Color(0.2f, 0.2f, 1.0f);
     bvg::Color centerColor = bvg::Color(1.0f, 0.6f, 0.2f);
     glm::mat4 XPlaneMat =
+        glm::translate(translation) *
         glm::translate(glm::vec3(0.0f, 1.0f, 1.0f) * planeDistance) *
         glm::rotate((float)M_PI_2, glm::vec3(0.0f, 0.0f, 1.0f)) *
         glm::scale(glm::vec3(planeSize));
     glm::mat4 YPlaneMat =
+        glm::translate(translation) *
         glm::translate(glm::vec3(1.0f, 0.0f, 1.0f) * planeDistance) *
         glm::scale(glm::vec3(planeSize));
     glm::mat4 ZPlaneMat =
+        glm::translate(translation) *
         glm::translate(glm::vec3(1.0f, 1.0f, 0.0f) * planeDistance) *
         glm::rotate((float)M_PI_2, glm::vec3(1.0f, 0.0f, 0.0f)) *
         glm::scale(glm::vec3(planeSize));
+    
+    if(!isMouseDown) {
+        state.controlOverMouse = Control::None;
+        state.selectedControl = Control::None;
+    }
+    
+    glm::vec3 viewForward = glm::normalize(target - eye);
+    state.viewRight = glm::normalize(glm::cross(up, viewForward));
+    state.viewUp = glm::cross(viewForward, state.viewRight);
     
     std::vector<DrawingWrapper> drawings {
         DrawingWrapper(new ArrowDrawing(viewproj, center, XArrowEnd, XColor, eye, target)),
@@ -319,17 +367,23 @@ void drawGizmos(bvg::Context& ctx, glm::mat4 viewproj, glm::vec3 eye, glm::vec3 
     
     std::sort(drawings.begin(), drawings.end(), std::greater<DrawingWrapper>());
     
+    state.isMouseOverControl = false;
     // From nearest to farest
     for(int i = drawings.size() - 1; i >= 0; i--) {
         Drawing* drawing = drawings.at(i).drawing;
-        if(drawing->mouseEvent(ctx, isMouseDown, mouseX, mouseY))
+        if(drawing->mouseEvent(ctx, state, model, isMouseDown, mouseX, mouseY)) {
+            state.isMouseOverControl = true;
             break;
+        }
     }
     
     for(auto drawingw : drawings)
-        drawingw.drawing->draw(ctx);
+        drawingw.drawing->draw(ctx, state);
     
     for(auto drawingw : drawings)
         delete drawingw.drawing;
     drawings.clear();
+    
+    state.lastMouseX = mouseX;
+    state.lastMouseY = mouseY;
 }

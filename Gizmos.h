@@ -9,5 +9,22 @@
 
 #include <blazevg.hh>
 
-void drawGizmos(bvg::Context& ctx, glm::mat4 viewproj, glm::vec3 eye, glm::vec3 target,
+enum class Control {
+    None,
+    Center
+};
+
+struct GizmoState {
+    Control selectedControl = Control::None;
+    Control controlOverMouse = Control::None;
+    bool isMouseOverControl = false;
+    float lastMouseX = 0.0f;
+    float lastMouseY = 0.0f;
+    glm::vec3 viewRight = glm::vec3(0.0f);
+    glm::vec3 viewUp = glm::vec3(0.0f);
+};
+
+void drawGizmos(bvg::Context& ctx, GizmoState& state,
+                glm::mat4 viewproj, glm::mat4& model,
+                glm::vec3 eye, glm::vec3 target, glm::vec3 up,
                 bool isMouseDown, float mouseX, float mouseY);

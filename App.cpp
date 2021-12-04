@@ -112,8 +112,10 @@ int App::run()
                     redrawRay = true;
                     rayX = currentEvent.motion.x;
                     rayY = currentEvent.motion.y;
-                    mYaw -= glm::radians((float)currentEvent.motion.xrel) * 25.0f;
-                    mPitch += glm::radians((float)currentEvent.motion.yrel) * 25.0f;
+                    if(mGizmoState.selectedControl == Control::None) {
+                        mYaw -= glm::radians((float)currentEvent.motion.xrel) * 25.0f;
+                        mPitch += glm::radians((float)currentEvent.motion.yrel) * 25.0f;
+                    }
                 }
                 break;
 			default:
@@ -315,7 +317,8 @@ void App::draw()
     glm::mat4 vp = glm::perspective(90.0f, (float)mWidth / (float)mHeight, 0.001f, 100.0f) *
         glm::lookAt(eye, glm::vec3(0.0f), up);
     
-    drawGizmos(bvgCtx, vp, eye, glm::vec3(0.0f), isMouseDown, mMouseX, mMouseY);
+    drawGizmos(bvgCtx, mGizmoState, vp, mModel, eye, glm::vec3(0.0f), up,
+               isMouseDown, mMouseX, mMouseY);
     
 //    bvgCtx.beginPath();
 ////    bvgCtx.moveTo(-50, 50);
