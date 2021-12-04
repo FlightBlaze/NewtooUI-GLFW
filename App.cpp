@@ -68,12 +68,22 @@ int App::run()
     bool redrawRay = false;
     int rayX = 0, rayY = 0;
     
+    bool controlIsPressed = false;
+    
 	while(!quit) {
 		while(SDL_PollEvent(&currentEvent) != 0) {
 			switch(currentEvent.type) {
 			case SDL_QUIT:
 				quit = true;
 				break;
+            case SDL_KEYDOWN:
+                if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
+                    controlIsPressed = true;
+                    break;
+            case SDL_KEYUP:
+                if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
+                    controlIsPressed = false;
+                break;
 			case SDL_WINDOWEVENT:
 				switch(currentEvent.window.event) {
 				case SDL_WINDOWEVENT_RESIZED:
@@ -109,12 +119,16 @@ int App::run()
                 mMouseX = currentEvent.motion.x;
                 mMouseY = currentEvent.motion.y;
                 if(isMouseDown) {
-                    redrawRay = true;
-                    rayX = currentEvent.motion.x;
-                    rayY = currentEvent.motion.y;
-                    if(mGizmoState.selectedControl == Control::None) {
-                        mYaw -= glm::radians((float)currentEvent.motion.xrel) * 25.0f;
-                        mPitch += glm::radians((float)currentEvent.motion.yrel) * 25.0f;
+                    if(controlIsPressed) {
+                        mZoom += currentEvent.motion.yrel * 0.05f;
+                    } else {
+                        redrawRay = true;
+                        rayX = currentEvent.motion.x;
+                        rayY = currentEvent.motion.y;
+                        if(mGizmoState.selectedControl == Control::None) {
+                            mYaw -= glm::radians((float)currentEvent.motion.xrel) * 25.0f;
+                            mPitch += glm::radians((float)currentEvent.motion.yrel) * 25.0f;
+                        }
                     }
                 }
                 break;
@@ -304,17 +318,16 @@ void App::draw()
     
     bvgCtx.font = bvgCtx.fonts["roboto-regular"];
     
-    float zoom = 15.0f;
-    float eyeX = sin(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * zoom;
-    float eyeY = sin(glm::radians(mPitch)) * zoom;
-    float eyeZ = cos(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * zoom;
+    float eyeX = sin(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * mZoom;
+    float eyeY = sin(glm::radians(mPitch)) * mZoom;
+    float eyeZ = cos(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * mZoom;
     glm::vec3 eye = glm::vec3(eyeX, eyeY, eyeZ);
     
     float normalizedPitch = degreesInRange(mPitch);
     bool flipY = normalizedPitch < 90.0f || normalizedPitch >= 270.0f;
     glm::vec3 up = glm::vec3(0.0, flipY ? 1.0 : -1.0, 0.0);
     
-    glm::mat4 vp = glm::perspective(90.0f, (float)mWidth / (float)mHeight, 0.001f, 100.0f) *
+    glm::mat4 vp = glm::perspective(90.0f, (float)mWidth / (float)mHeight, 0.01f, 100.0f) *
         glm::lookAt(eye, glm::vec3(0.0f), up);
     
     drawGizmos(bvgCtx, mGizmoState, vp, mModel, eye, glm::vec3(0.0f), up,

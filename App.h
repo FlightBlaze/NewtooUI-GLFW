@@ -101,8 +101,10 @@ private:
     
     void recreateRenderTargets();
     
-    float mPitch = 0.0f;
-    float mYaw = 0.0f;
+    float mPitch = 45.0f;
+    float mYaw = 45.0f;
+    
+    float mZoom = 15.0f;
     
     float mMouseX = 0.0f,
         mMouseY = 0.0f;

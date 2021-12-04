@@ -68,8 +68,14 @@ void drawGizmoArrow(bvg::Context& ctx, glm::mat4& viewproj,
     ctx.strokeStyle = style;
     ctx.fillStyle = style;
     ctx.lineWidth = 8;
-    glm::vec2 originS = worldToScreenSpace(ctx, origin, viewproj);
-    glm::vec2 endS = worldToScreenSpace(ctx, end, viewproj);
+    glm::vec3 originS = worldToScreenSpace(ctx, origin, viewproj);
+    glm::vec3 endS = worldToScreenSpace(ctx, end, viewproj);
+    
+    // If arrow tip is too near to the camera then
+    // then don't render the arrow
+    if(originS.z >= 1.0f || endS.z >= 1.0f)
+        return;
+    
     drawArrow(ctx, originS.x, originS.y, endS.x, endS.y, 16);
 }
 
@@ -100,12 +106,19 @@ void drawGizmoPlane(bvg::Context& ctx, glm::mat4& viewproj,
     };
     
     for(int i = 0; i < vertices.size(); i++) {
-        vertices.at(i) = worldToScreenSpace(ctx, model * glm::vec4(vertices.at(i), 1.0f), viewproj);
+        glm::vec3 proj = worldToScreenSpace(ctx, model * glm::vec4(vertices.at(i), 1.0f), viewproj);
+        
+        // If one of the vertices is too near to the
+        //camera then then don't render the plane
+        if(proj.z >= 1.0f)
+            return;
+        
+        vertices.at(i) = proj;
     }
     glm::vec3& first = vertices.at(0);
     ctx.beginPath();
     ctx.moveTo(first.x, first.y);
-    for(int i = 0; i < vertices.size(); i++) {
+    for(int i = 1; i < vertices.size(); i++) {
         glm::vec3& v = vertices.at(i);
         ctx.lineTo(v.x, v.y);
     }
@@ -319,6 +332,15 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state,
     float arrowLength = 5.0f;
     float planeSize = 1.0f;
     float planeDistance = 3.0f;
+    
+    std::cout << glm::distance(translation, eye) << std::endl;
+    
+    // If gizmo is beind the camera
+    if(worldToScreenSpace(ctx, translation, viewproj).z > 1.0f ||
+       glm::distance(translation, eye) < 7.5f) {
+        return;
+    }
+    
     glm::vec3 center = glm::vec3(0.0f);
     glm::vec3 XArrowEnd = glm::vec3(1.0f, 0.0f, 0.0f) * arrowLength;
     glm::vec3 YArrowEnd = glm::vec3(0.0f, 1.0f, 0.0f) * arrowLength;
