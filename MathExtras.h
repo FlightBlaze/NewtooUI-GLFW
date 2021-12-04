@@ -9,6 +9,9 @@ float invlerpf(float a, float b, float v);
 // Remap
 float remapf(float iMin, float iMax, float oMin, float oMax, float v);
 
+// Clamp
+float clampf(float vmin, float value, float vmax);
+
 #include <glm/glm.hpp>
 
 bool isPointInTriange(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec2 point);

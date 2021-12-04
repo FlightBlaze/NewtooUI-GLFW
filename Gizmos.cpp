@@ -9,6 +9,7 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <iostream>
+#include <MathExtras.h>
 
 void drawArrow(bvg::Context& ctx, float sx, float sy, float ex, float ey, float size) {
     ctx.beginPath();
@@ -68,6 +69,7 @@ void drawGizmoArrow(bvg::Context& ctx, glm::mat4& viewproj,
     ctx.strokeStyle = style;
     ctx.fillStyle = style;
     ctx.lineWidth = 8;
+    
     glm::vec3 originS = worldToScreenSpace(ctx, origin, viewproj);
     glm::vec3 endS = worldToScreenSpace(ctx, end, viewproj);
     
@@ -82,10 +84,16 @@ void drawGizmoArrow(bvg::Context& ctx, glm::mat4& viewproj,
 void drawGizmoCenter(bvg::Context& ctx, glm::mat4& viewproj,
                      glm::vec3 center, bvg::Color color) {
     glm::vec2 centerS = worldToScreenSpace(ctx, center, viewproj);
-    ctx.fillStyle = bvg::SolidColor(color);
+    bvg::Color fillColor = color;
+    fillColor.a *= 0.5f;
+//    fillColor = bvg::Color::lerp(fillColor, bvg::colors::Black, 0.2f);
+    ctx.fillStyle = bvg::SolidColor(fillColor);
+    ctx.strokeStyle = bvg::SolidColor(color);
     ctx.beginPath();
-    ctx.arc(centerS.x, centerS.y, 16.0f, 0.0f, M_PI * 2.0f);
+    ctx.arc(centerS.x, centerS.y, 16.0f, 0.0f, M_PI * 2.0f + 0.2f);
     ctx.convexFill();
+    ctx.lineWidth = 4.0f;
+    ctx.stroke();
 }
 
 bool isMouseOverGizmoCenter(bvg::Context& ctx, glm::mat4& viewproj,
@@ -186,9 +194,9 @@ color(color)
     glm::vec3 center = model * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
     glm::vec3 centerUp = model * glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
     glm::vec3 planeDir = glm::normalize(centerUp - center);
-    glm::vec3 viewDir = glm::normalize(target - eye);
+    glm::vec3 viewDir = glm::normalize(center - eye);
     float codir = fabsf(glm::dot(planeDir, viewDir));
-    this->color.a = fminf(codir * 4.0f, 1.0f);
+    this->color.a *= fminf(codir * 4.0f, 1.0f);
     
     this->distanceToEye = glm::distance(center, eye);
 }
@@ -221,13 +229,13 @@ origin(origin),
 end(end),
 color(color)
 {
+    glm::vec3 center = (origin + end) / 2.0f;
     glm::vec3 arrowDir = glm::normalize(end - origin);
-    glm::vec3 viewDir = glm::normalize(target - eye);
+    glm::vec3 viewDir = glm::normalize(center - eye);
     float codir = 1.0f - fabsf(glm::dot(arrowDir, viewDir));
-    this->color.a = fminf(codir * 20.0f, 1.0f);
+    this->color.a *= fminf(codir * 20.0f, 1.0f);
     
     type = DrawingType::Arrow;
-    glm::vec3 center = (origin + end) / 2.0f;
     this->distanceToEye = glm::distance(center, eye);
 }
 
@@ -333,11 +341,15 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state,
     float planeSize = 1.0f;
     float planeDistance = 3.0f;
     
-    std::cout << glm::distance(translation, eye) << std::endl;
+    float eyeDistance = glm::distance(translation, eye);
+    float minDistance = 7.5f;
+    float visibleDistance = 10.0f;
+    float opacity = remapf(minDistance, visibleDistance, 0.0f, 1.0f, eyeDistance);
+    opacity = clampf(0.0f, opacity, 1.0f);
     
     // If gizmo is beind the camera
     if(worldToScreenSpace(ctx, translation, viewproj).z > 1.0f ||
-       glm::distance(translation, eye) < 7.5f) {
+       eyeDistance < 7.5f) {
         return;
     }
     
@@ -353,6 +365,10 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state,
     bvg::Color YColor = bvg::Color(0.2f, 1.0f, 0.2f);
     bvg::Color ZColor = bvg::Color(0.2f, 0.2f, 1.0f);
     bvg::Color centerColor = bvg::Color(1.0f, 0.6f, 0.2f);
+    XColor.a *= opacity;
+    YColor.a *= opacity;
+    ZColor.a *= opacity;
+    centerColor.a *= opacity;
     glm::mat4 XPlaneMat =
         glm::translate(translation) *
         glm::translate(glm::vec3(0.0f, 1.0f, 1.0f) * planeDistance) *

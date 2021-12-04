@@ -16,6 +16,10 @@ float remapf(float iMin, float iMax, float oMin, float oMax, float v)
 	return lerpf(oMin, oMax, t);
 }
 
+float clampf(float vmin, float value, float vmax) {
+    return fmaxf(vmin, fminf(vmax, value));
+}
+
 // Point in triangle test with barycentric coordinate system
 // http://totologic.blogspot.com/2014/01/accurate-point-in-triangle-test.html
 // https://blackpawn.com/texts/pointinpoly/

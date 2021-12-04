@@ -68,8 +68,6 @@ int App::run()
     bool redrawRay = false;
     int rayX = 0, rayY = 0;
     
-    bool controlIsPressed = false;
-    
 	while(!quit) {
 		while(SDL_PollEvent(&currentEvent) != 0) {
 			switch(currentEvent.type) {
@@ -78,11 +76,11 @@ int App::run()
 				break;
             case SDL_KEYDOWN:
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
-                    controlIsPressed = true;
+                    mIsControlPressed = true;
                     break;
             case SDL_KEYUP:
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
-                    controlIsPressed = false;
+                    mIsControlPressed = false;
                 break;
 			case SDL_WINDOWEVENT:
 				switch(currentEvent.window.event) {
@@ -119,7 +117,7 @@ int App::run()
                 mMouseX = currentEvent.motion.x;
                 mMouseY = currentEvent.motion.y;
                 if(isMouseDown) {
-                    if(controlIsPressed) {
+                    if(mIsControlPressed) {
                         mZoom += currentEvent.motion.yrel * 0.05f;
                     } else {
                         redrawRay = true;
@@ -330,8 +328,10 @@ void App::draw()
     glm::mat4 vp = glm::perspective(90.0f, (float)mWidth / (float)mHeight, 0.01f, 100.0f) *
         glm::lookAt(eye, glm::vec3(0.0f), up);
     
+    bool blockMouseEvent = mIsControlPressed;
+    
     drawGizmos(bvgCtx, mGizmoState, vp, mModel, eye, glm::vec3(0.0f), up,
-               isMouseDown, mMouseX, mMouseY);
+               blockMouseEvent ? false : isMouseDown, mMouseX, mMouseY);
     
 //    bvgCtx.beginPath();
 ////    bvgCtx.moveTo(-50, 50);

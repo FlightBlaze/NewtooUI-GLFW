@@ -109,6 +109,8 @@ private:
     float mMouseX = 0.0f,
         mMouseY = 0.0f;
     
+    bool mIsControlPressed = false;
+    
     glm::mat4 mModel = glm::mat4(1.0f);
     GizmoState mGizmoState;
     
