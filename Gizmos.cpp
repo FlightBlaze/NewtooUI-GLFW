@@ -84,6 +84,11 @@ void drawGizmoArrow(bvg::Context& ctx, glm::mat4& viewproj,
 void drawGizmoCenter(bvg::Context& ctx, glm::mat4& viewproj,
                      glm::vec3 center, bvg::Color color) {
     glm::vec2 centerS = worldToScreenSpace(ctx, center, viewproj);
+    ctx.fillStyle = bvg::SolidColor(color);
+    ctx.beginPath();
+    ctx.arc(centerS.x, centerS.y, 4.0f, 0.0f, M_PI * 2.0f);
+    ctx.convexFill();
+    
     bvg::Color fillColor = color;
     fillColor.a *= 0.5f;
 //    fillColor = bvg::Color::lerp(fillColor, bvg::colors::Black, 0.2f);
@@ -98,7 +103,9 @@ void drawGizmoCenter(bvg::Context& ctx, glm::mat4& viewproj,
 
 bool isMouseOverGizmoCenter(bvg::Context& ctx, glm::mat4& viewproj,
                             glm::vec3 center, glm::vec2 mouse) {
-    glm::vec2 centerS = worldToScreenSpace(ctx, center, viewproj);
+    glm::vec3 centerS = worldToScreenSpace(ctx, center, viewproj);
+    if(centerS.z >= 1.0f)
+        return;
     ctx.beginPath();
     ctx.arc(centerS.x, centerS.y, 16.0f, 0.0f, M_PI * 2.0f);
     return ctx.isPointInsideConvexFill(mouse.x, mouse.y);
