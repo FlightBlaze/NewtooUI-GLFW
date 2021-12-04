@@ -14,6 +14,12 @@ enum class Control {
     Center
 };
 
+enum class GizmoTool {
+    Translate,
+    Rotate,
+    Scale
+};
+
 struct GizmoState {
     Control selectedControl = Control::None;
     Control controlOverMouse = Control::None;
@@ -24,7 +30,7 @@ struct GizmoState {
     glm::vec3 viewUp = glm::vec3(0.0f);
 };
 
-void drawGizmos(bvg::Context& ctx, GizmoState& state,
+void drawGizmos(bvg::Context& ctx, GizmoState& state, GizmoTool tool,
                 glm::mat4 viewproj, glm::mat4& model,
                 glm::vec3 eye, glm::vec3 target, glm::vec3 up,
                 bool isMouseDown, float mouseX, float mouseY);

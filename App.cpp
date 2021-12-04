@@ -330,7 +330,9 @@ void App::draw()
     
     bool blockMouseEvent = mIsControlPressed;
     
-    drawGizmos(bvgCtx, mGizmoState, vp, mModel, eye, glm::vec3(0.0f), up,
+    GizmoTool tool = GizmoTool::Rotate;
+    
+    drawGizmos(bvgCtx, mGizmoState, tool, vp, mModel, eye, glm::vec3(0.0f), up,
                blockMouseEvent ? false : isMouseDown, mMouseX, mMouseY);
     
 //    bvgCtx.beginPath();
