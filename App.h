@@ -113,6 +113,7 @@ private:
     
     glm::mat4 mModel = glm::mat4(1.0f);
     GizmoState mGizmoState;
+    GizmoTool mGizmoTool = GizmoTool::Translate;
     
 public:
     glm::vec2 mSquirclePos;

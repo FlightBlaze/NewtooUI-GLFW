@@ -95,7 +95,7 @@ void drawGizmoCenter(bvg::Context& ctx, glm::mat4& viewproj,
     ctx.fillStyle = bvg::SolidColor(fillColor);
     ctx.strokeStyle = bvg::SolidColor(color);
     ctx.beginPath();
-    ctx.arc(centerS.x, centerS.y, 16.0f, 0.0f, M_PI * 2.0f + 0.2f);
+    ctx.arc(centerS.x, centerS.y, 16.0f, 0.0f, M_PI * 2.0f);
     ctx.convexFill();
     ctx.lineWidth = 4.0f;
     ctx.stroke();
@@ -170,6 +170,7 @@ struct LineSegment {
 
 void drawGizmoOrbit(bvg::Context& ctx, glm::mat4& viewproj,
                     glm::mat4& model, bvg::Color color, glm::vec3 viewDir) {
+    
     std::vector<glm::vec3> vertices = createCircle(99);
     for(int i = 0; i < vertices.size(); i++) {
         vertices.at(i) = model * glm::vec4(vertices.at(i), 1.0f);
@@ -227,6 +228,46 @@ void drawGizmoOrbit(bvg::Context& ctx, glm::mat4& viewproj,
             ctx.lineTo(ls.end.x, ls.end.y);
         }
         prevDeclined = false;
+    }
+    ctx.stroke();
+}
+
+void drawGizmoArcball(bvg::Context& ctx, glm::vec3 center, glm::mat4& viewproj,
+                      float radius, bvg::Color color) {
+    color.a *= 0.5f;
+    glm::vec3 centerS = worldToScreenSpace(ctx, center, viewproj);
+    ctx.fillStyle = bvg::SolidColor(color);
+    ctx.beginPath();
+    ctx.arc(centerS.x, centerS.y, radius, 0.0f, M_PI * 2.0f);
+    ctx.convexFill();
+}
+
+void drawGizmoScreenSpaceOrbit(bvg::Context& ctx, glm::vec3 center, glm::mat4& viewproj,
+                               float radius, bvg::Color color, glm::vec3 eye) {
+    std::vector<glm::vec3> vertices = createCircle(48);
+    for(int i = 0; i < vertices.size(); i++) {
+        glm::vec3& v = vertices.at(i);
+        v *= radius;
+        v = glm::quat(glm::vec3(M_PI_2, 0.0f, 0.0f)) * v;
+        v = glm::quatLookAt(glm::normalize(center - eye), glm::vec3(0.0f, 1.0f, 0.0f)) *
+            glm::vec4(v, 1.0f);
+        v += center;
+    }
+    
+    for(int i = 0; i < vertices.size(); i++) {
+        glm::vec3& v = vertices.at(i);
+        v = worldToScreenSpace(ctx, v, viewproj);
+    }
+    
+    glm::vec3 centerS = worldToScreenSpace(ctx, center, viewproj);
+    ctx.strokeStyle = bvg::SolidColor(color);
+    ctx.lineWidth = 5.0f;
+    ctx.beginPath();
+    glm::vec3& first = vertices.front();
+    ctx.moveTo(first.x, first.y);
+    for(int i = 1; i < vertices.size(); i++) {
+        glm::vec3& v = vertices.at(i);
+        ctx.lineTo(v.x, v.y);
     }
     ctx.stroke();
 }
@@ -410,21 +451,73 @@ OrbitDrawing::OrbitDrawing(glm::mat4& viewproj, glm::mat4& model,
                            glm::vec3 target):
 viewproj(viewproj),
 model(model),
-color(color),
-viewDir(glm::normalize(target - eye))
+color(color)
 {
     glm::vec3 center = model * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    glm::vec3 centerUp = model * glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-    glm::vec3 planeDir = glm::normalize(centerUp - center);
-    glm::vec3 viewDir = glm::normalize(center - eye);
-//    float codir = fabsf(glm::dot(planeDir, viewDir));
-//    this->color.a *= fminf(codir * 4.0f, 1.0f);
-    
+    viewDir = glm::normalize(center - eye);
     this->distanceToEye = glm::distance(center, eye);
 }
 
 void OrbitDrawing::draw(bvg::Context& ctx, GizmoState& state) {
     drawGizmoOrbit(ctx, viewproj, model, color, viewDir);
+}
+
+class ArcballDrawing : public Drawing {
+public:
+    ArcballDrawing(glm::mat4& viewproj, glm::vec3 center,
+                   float radius, bvg::Color color, glm::vec3 eye);
+    
+    glm::mat4& viewproj;
+    glm::vec3 center;
+    bvg::Color color;
+    float radius;
+    
+    void draw(bvg::Context& ctx, GizmoState& state);
+};
+
+ArcballDrawing::ArcballDrawing(glm::mat4& viewproj, glm::vec3 center,
+                               float radius, bvg::Color color, glm::vec3 eye):
+viewproj(viewproj),
+color(color),
+radius(radius),
+center(center)
+{
+    this->distanceToEye = glm::distance(center, eye);
+}
+
+void ArcballDrawing::draw(bvg::Context& ctx, GizmoState& state) {
+    bvg::Color currentColor = color;
+    currentColor.a = 0.0f;
+    drawGizmoArcball(ctx, center, viewproj, radius, currentColor);
+}
+
+class ScreenSpaceOrbitDrawing : public Drawing {
+public:
+    ScreenSpaceOrbitDrawing(glm::mat4& viewproj, glm::vec3 center,
+                   float radius, bvg::Color color, glm::vec3 eye);
+    
+    glm::mat4& viewproj;
+    glm::vec3 center;
+    bvg::Color color;
+    float radius;
+    glm::vec3 eye;
+    
+    void draw(bvg::Context& ctx, GizmoState& state);
+};
+
+ScreenSpaceOrbitDrawing::ScreenSpaceOrbitDrawing(glm::mat4& viewproj, glm::vec3 center,
+                               float radius, bvg::Color color, glm::vec3 eye):
+viewproj(viewproj),
+color(color),
+radius(radius),
+center(center),
+eye(eye)
+{
+    this->distanceToEye = glm::distance(center, eye);
+}
+
+void ScreenSpaceOrbitDrawing::draw(bvg::Context& ctx, GizmoState& state) {
+    drawGizmoScreenSpaceOrbit(ctx, center, viewproj, radius, color, eye);
 }
 
 struct DrawingWrapper {
@@ -464,10 +557,12 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
     glm::vec4 perspective;
     glm::decompose(model, scale, rotation, translation, skew, perspective);
     
-    float arrowLength = 5.0f;
-    float planeSize = 1.0f;
-    float planeDistance = 3.0f;
-    float orbitRadius = 5.5f;
+    float gizmoScale = 0.4f;
+    gizmoScale *= glm::distance(translation, eye) / 15.0f;
+    float arrowLength = 5.0f * gizmoScale;
+    float planeSize = 1.0f * gizmoScale;
+    float planeDistance = 3.0f * gizmoScale;
+    float orbitRadius = 5.5f * gizmoScale;
     
     float eyeDistance = glm::distance(translation, eye);
     float minDistance = 7.5f;
@@ -541,6 +636,13 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
             break;
         case GizmoTool::Rotate:
         {
+            float arcballRadius = orbitRadius;
+            
+            bvg::Color SSOrbitColor = bvg::Color(0.75f, 0.75f, 0.75f);
+            bvg::Color ArcballColor = bvg::Color(0.8f, 0.8f, 0.8f, 0.5f);
+            SSOrbitColor.a *= opacity;
+            ArcballColor.a *= opacity;
+            
             glm::mat4 XOrbitMat =
                 glm::translate(translation) *
                 glm::scale(glm::vec3(orbitRadius));
@@ -554,6 +656,11 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
                 glm::scale(glm::vec3(orbitRadius));
             
             drawings = {
+                DrawingWrapper(new ScreenSpaceOrbitDrawing(viewproj, center,
+                                                           arcballRadius + 0.5f,
+                                                           SSOrbitColor, eye)),
+                DrawingWrapper(new ArcballDrawing(viewproj, center, arcballRadius,
+                                                  ArcballColor, eye)),
                 DrawingWrapper(new OrbitDrawing(viewproj, XOrbitMat, XColor, eye, target)),
                 DrawingWrapper(new OrbitDrawing(viewproj, YOrbitMat, YColor, eye, target)),
                 DrawingWrapper(new OrbitDrawing(viewproj, ZOrbitMat, ZColor, eye, target))
@@ -562,12 +669,18 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
             break;
         case GizmoTool::Scale:
         {
-            
+            glm::vec3 XLineEnd = glm::vec3(1.0f, 0.0f, 0.0f) * arrowLength;
+            glm::vec3 YLineEnd = glm::vec3(0.0f, 1.0f, 0.0f) * arrowLength;
+            glm::vec3 ZLineEnd = glm::vec3(0.0f, 0.0f, 1.0f) * arrowLength;
+            XLineEnd = translation + XLineEnd;
+            YLineEnd = translation + YLineEnd;
+            ZLineEnd = translation + ZLineEnd;
         }
             break;
     }
             
-    std::sort(drawings.begin(), drawings.end(), std::greater<DrawingWrapper>());
+    if(tool != GizmoTool::Rotate)
+        std::sort(drawings.begin(), drawings.end(), std::greater<DrawingWrapper>());
     
     state.isMouseOverControl = false;
     // From nearest to farest
