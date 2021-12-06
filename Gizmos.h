@@ -32,6 +32,7 @@ struct GizmoState {
     glm::vec3 viewUp;
     glm::vec3 offset;
     float z = 0.0f;
+    float startAngle = 0.0f;
     float angle = 0.0f;
     glm::vec3 translation;
     glm::vec3 scale;
