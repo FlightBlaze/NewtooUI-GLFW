@@ -8,6 +8,7 @@
 #include <Gizmos.h>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/quaternion.hpp>
 #include <iostream>
 #include <MathExtras.h>
 
@@ -60,6 +61,17 @@ glm::vec3 worldToScreenSpace(bvg::Context& ctx, glm::vec3 vec, glm::mat4& viewpr
     float x = (projected.x + 1.0f) * ctx.width / 2.0f;
     float y = (1.0f - projected.y) * ctx.height / 2.0f;
     return glm::vec3(x, y, projected.z);
+}
+
+glm::vec3 screenToWorldSpace(bvg::Context& ctx, glm::vec3 vec, glm::mat4& viewproj) {
+    // screen coords to clip coords
+    float normalizedX = vec.x / (ctx.width * 0.5f) - 1.0f;
+    float normalizedY = vec.y / (ctx.height * 0.5f) - 1.0f;
+    auto clip = glm::vec4(normalizedX, -normalizedY, vec.z, 1.0f);
+    glm::mat4 invVP = glm::inverse(viewproj);
+    auto world = invVP * clip;
+    world /= world.w;
+    return glm::vec3(world);
 }
 
 void drawGizmoArrow(bvg::Context& ctx, glm::mat4& viewproj,
@@ -147,11 +159,13 @@ void drawGizmoPlane(bvg::Context& ctx, glm::mat4& viewproj,
     ctx.stroke();
 }
 
-std::vector<glm::vec3> createCircle(const int segments) {
+std::vector<glm::vec3> createCircle(const int segments,
+                                    float startAngle = 0.0f,
+                                    float endAngle = glm::radians(360.0f)) {
     auto arcVerts = std::vector<glm::vec3>(segments);
     const float radius = 1.0f;
-    float angle = 0.0f;
-    const float arcLength = glm::radians(360.0f);
+    float angle = startAngle;
+    const float arcLength = endAngle - startAngle;
     for (int i = 0; i <= segments - 1; i++) {
         float x = sin(angle) * radius;
         float z = cos(angle) * radius;
@@ -242,9 +256,10 @@ void drawGizmoArcball(bvg::Context& ctx, glm::vec3 center, glm::mat4& viewproj,
     ctx.convexFill();
 }
 
-void drawGizmoScreenSpaceOrbit(bvg::Context& ctx, glm::vec3 center, glm::mat4& viewproj,
-                               float radius, bvg::Color color, glm::vec3 eye) {
-    std::vector<glm::vec3> vertices = createCircle(48);
+void buildGizmoScreenSpaceOrbit(bvg::Context& ctx, glm::vec3 center, glm::mat4& viewproj,
+                                float radius, glm::vec3 eye, int segments,
+                                float lineWidth = 5.0f) {
+    std::vector<glm::vec3> vertices = createCircle(segments);
     for(int i = 0; i < vertices.size(); i++) {
         glm::vec3& v = vertices.at(i);
         v *= radius;
@@ -260,8 +275,7 @@ void drawGizmoScreenSpaceOrbit(bvg::Context& ctx, glm::vec3 center, glm::mat4& v
     }
     
     glm::vec3 centerS = worldToScreenSpace(ctx, center, viewproj);
-    ctx.strokeStyle = bvg::SolidColor(color);
-    ctx.lineWidth = 5.0f;
+    ctx.lineWidth = lineWidth;
     ctx.beginPath();
     glm::vec3& first = vertices.front();
     ctx.moveTo(first.x, first.y);
@@ -269,7 +283,19 @@ void drawGizmoScreenSpaceOrbit(bvg::Context& ctx, glm::vec3 center, glm::mat4& v
         glm::vec3& v = vertices.at(i);
         ctx.lineTo(v.x, v.y);
     }
+}
+
+void drawGizmoScreenSpaceOrbit(bvg::Context& ctx, glm::vec3 center, glm::mat4& viewproj,
+                               float radius, bvg::Color color, glm::vec3 eye) {
+    buildGizmoScreenSpaceOrbit(ctx, center, viewproj, radius, eye, 48, 5.0f);
+    ctx.strokeStyle = bvg::SolidColor(color);
     ctx.stroke();
+}
+
+bool isMouseOverGizmoScreenSpaceOrbit(bvg::Context& ctx, glm::vec3 center, glm::mat4& viewproj,
+                               float radius, glm::vec3 eye, glm::vec2 mouse) {
+    buildGizmoScreenSpaceOrbit(ctx, center, viewproj, radius, eye, 16, 10.0f);
+    return ctx.isPointInsideStroke(mouse.x, mouse.y);
 }
 
 enum class DrawingType {
@@ -409,14 +435,16 @@ void CenterDrawing::draw(bvg::Context& ctx, GizmoState& state) {
     drawGizmoCenter(ctx, viewproj, center, currentColor);
 }
 
+glm::vec3 mouseAsWorldPoint(bvg::Context& ctx, GizmoState& state, glm::mat4& viewproj,
+                            float mouseX, float mouseY) {
+    return screenToWorldSpace(ctx, glm::vec3(mouseX, mouseY, state.z), viewproj);
+}
+
 bool CenterDrawing::mouseEvent(bvg::Context& ctx, GizmoState& state, glm::mat4& model,
                                bool isMouseDown, float mouseX, float mouseY) {
     if(state.selectedControl == Control::Center) {
-        float relX = mouseX - state.lastMouseX;
-        float relY = mouseY - state.lastMouseY;
-        glm::vec3 move = state.viewUp * -relY + state.viewRight * -relX;
-        move *= 0.088f;
-        model = glm::translate(move) * model;
+        model = glm::translate(mouseAsWorldPoint(ctx, state, viewproj, mouseX, mouseY) +
+                               state.offset);
     }
     
     if(isMouseOverGizmoCenter(ctx, viewproj, center, glm::vec2(mouseX, mouseY))) {
@@ -424,8 +452,11 @@ bool CenterDrawing::mouseEvent(bvg::Context& ctx, GizmoState& state, glm::mat4& 
             state.controlOverMouse = Control::Center;
             return true;
         }
-        if(state.controlOverMouse == Control::Center) {
+        if(state.controlOverMouse == Control::Center &&
+           state.selectedControl != Control::Center) {
             state.selectedControl = Control::Center;
+            state.z = worldToScreenSpace(ctx, this->center, this->viewproj).z;
+            state.offset = this->center - mouseAsWorldPoint(ctx, state, viewproj, mouseX, mouseY);
         }
         return true;
     }
@@ -503,6 +534,8 @@ public:
     glm::vec3 eye;
     
     void draw(bvg::Context& ctx, GizmoState& state);
+    bool mouseEvent(bvg::Context& ctx, GizmoState& state, glm::mat4& model,
+                    bool isMouseDown, float mouseX, float mouseY);
 };
 
 ScreenSpaceOrbitDrawing::ScreenSpaceOrbitDrawing(glm::mat4& viewproj, glm::vec3 center,
@@ -518,6 +551,40 @@ eye(eye)
 
 void ScreenSpaceOrbitDrawing::draw(bvg::Context& ctx, GizmoState& state) {
     drawGizmoScreenSpaceOrbit(ctx, center, viewproj, radius, color, eye);
+}
+
+bool ScreenSpaceOrbitDrawing::mouseEvent(bvg::Context& ctx, GizmoState& state,
+                                         glm::mat4& model, bool isMouseDown,
+                                         float mouseX, float mouseY) {
+    glm::vec2 centerS = worldToScreenSpace(ctx, center, viewproj);
+    glm::vec2 mouse = glm::vec2(mouseX, mouseY);
+    glm::vec2 relativeMouse = mouse - centerS;
+    
+    if(state.selectedControl == Control::SSOrbit) {
+        float angle = -atan2f(relativeMouse.x, relativeMouse.y);
+        float relativeAngle = angle - state.angle;
+        glm::vec3 viewDir = center - eye;
+        model =
+            glm::translate(state.translation) *
+            glm::rotate(relativeAngle, viewDir) *
+            glm::translate(-state.translation) *
+            model;
+        state.angle = angle;
+    }
+    
+    if(isMouseOverGizmoScreenSpaceOrbit(ctx, center, viewproj, radius, eye, mouse)) {
+        if(!isMouseDown) {
+            state.controlOverMouse = Control::SSOrbit;
+            return true;
+        }
+        if(state.controlOverMouse == Control::SSOrbit &&
+           state.selectedControl != Control::SSOrbit) {
+            state.selectedControl = Control::SSOrbit;
+            state.angle = -atan2f(relativeMouse.x, relativeMouse.y);
+        }
+        return true;
+    }
+    return false;
 }
 
 struct DrawingWrapper {
@@ -550,28 +617,25 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
                 glm::vec3 eye, glm::vec3 target, glm::vec3 up,
                 bool isMouseDown, float mouseX, float mouseY)
 {
-    glm::vec3 scale;
-    glm::quat rotation;
-    glm::vec3 translation;
     glm::vec3 skew;
     glm::vec4 perspective;
-    glm::decompose(model, scale, rotation, translation, skew, perspective);
+    glm::decompose(model, state.scale, state.rotation, state.translation, skew, perspective);
     
     float gizmoScale = 0.4f;
-    gizmoScale *= glm::distance(translation, eye) / 15.0f;
+    gizmoScale *= glm::distance(state.translation, eye) / 15.0f;
     float arrowLength = 5.0f * gizmoScale;
     float planeSize = 1.0f * gizmoScale;
     float planeDistance = 3.0f * gizmoScale;
     float orbitRadius = 5.5f * gizmoScale;
     
-    float eyeDistance = glm::distance(translation, eye);
+    float eyeDistance = glm::distance(state.translation, eye);
     float minDistance = 7.5f;
     float visibleDistance = 10.0f;
     float opacity = remapf(minDistance, visibleDistance, 0.0f, 1.0f, eyeDistance);
     opacity = clampf(0.0f, opacity, 1.0f);
     
     // If gizmo is beind the camera
-    if(worldToScreenSpace(ctx, translation, viewproj).z > 1.0f ||
+    if(worldToScreenSpace(ctx, state.translation, viewproj).z > 1.0f ||
        eyeDistance < 7.5f) {
         return;
     }
@@ -588,7 +652,7 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
     std::vector<DrawingWrapper> drawings;
     
     glm::vec3 center = glm::vec3(0.0f);
-    center = translation + center;
+    center = state.translation + center;
     
     bvg::Color XColor = bvg::Color(1.0f, 0.2f, 0.2f);
     bvg::Color YColor = bvg::Color(0.2f, 1.0f, 0.2f);
@@ -605,20 +669,20 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
             glm::vec3 XArrowEnd = glm::vec3(1.0f, 0.0f, 0.0f) * arrowLength;
             glm::vec3 YArrowEnd = glm::vec3(0.0f, 1.0f, 0.0f) * arrowLength;
             glm::vec3 ZArrowEnd = glm::vec3(0.0f, 0.0f, 1.0f) * arrowLength;
-            XArrowEnd = translation + XArrowEnd;
-            YArrowEnd = translation + YArrowEnd;
-            ZArrowEnd = translation + ZArrowEnd;
+            XArrowEnd = state.translation + XArrowEnd;
+            YArrowEnd = state.translation + YArrowEnd;
+            ZArrowEnd = state.translation + ZArrowEnd;
             glm::mat4 XPlaneMat =
-                glm::translate(translation) *
+                glm::translate(state.translation) *
                 glm::translate(glm::vec3(0.0f, 1.0f, 1.0f) * planeDistance) *
                 glm::rotate((float)M_PI_2, glm::vec3(0.0f, 0.0f, 1.0f)) *
                 glm::scale(glm::vec3(planeSize));
             glm::mat4 YPlaneMat =
-                glm::translate(translation) *
+                glm::translate(state.translation) *
                 glm::translate(glm::vec3(1.0f, 0.0f, 1.0f) * planeDistance) *
                 glm::scale(glm::vec3(planeSize));
             glm::mat4 ZPlaneMat =
-                glm::translate(translation) *
+                glm::translate(state.translation) *
                 glm::translate(glm::vec3(1.0f, 1.0f, 0.0f) * planeDistance) *
                 glm::rotate((float)M_PI_2, glm::vec3(1.0f, 0.0f, 0.0f)) *
                 glm::scale(glm::vec3(planeSize));
@@ -637,6 +701,7 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
         case GizmoTool::Rotate:
         {
             float arcballRadius = orbitRadius;
+            float SSOrbitRadius = arcballRadius + 1.0f * gizmoScale;
             
             bvg::Color SSOrbitColor = bvg::Color(0.75f, 0.75f, 0.75f);
             bvg::Color ArcballColor = bvg::Color(0.8f, 0.8f, 0.8f, 0.5f);
@@ -644,20 +709,23 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
             ArcballColor.a *= opacity;
             
             glm::mat4 XOrbitMat =
-                glm::translate(translation) *
+                glm::translate(state.translation) *
+                glm::toMat4(state.rotation) *
                 glm::scale(glm::vec3(orbitRadius));
             glm::mat4 YOrbitMat =
-                glm::translate(translation) *
+                glm::translate(state.translation) *
+                glm::toMat4(state.rotation) *
                 glm::rotate((float)M_PI_2, glm::vec3(0.0f, 0.0f, 1.0f)) *
                 glm::scale(glm::vec3(orbitRadius));
             glm::mat4 ZOrbitMat =
-                glm::translate(translation) *
+                glm::translate(state.translation) *
+                glm::toMat4(state.rotation) *
                 glm::rotate((float)M_PI_2, glm::vec3(1.0f, 0.0f, 0.0f)) *
                 glm::scale(glm::vec3(orbitRadius));
             
             drawings = {
                 DrawingWrapper(new ScreenSpaceOrbitDrawing(viewproj, center,
-                                                           arcballRadius + 0.5f,
+                                                           SSOrbitRadius,
                                                            SSOrbitColor, eye)),
                 DrawingWrapper(new ArcballDrawing(viewproj, center, arcballRadius,
                                                   ArcballColor, eye)),
@@ -672,9 +740,9 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
             glm::vec3 XLineEnd = glm::vec3(1.0f, 0.0f, 0.0f) * arrowLength;
             glm::vec3 YLineEnd = glm::vec3(0.0f, 1.0f, 0.0f) * arrowLength;
             glm::vec3 ZLineEnd = glm::vec3(0.0f, 0.0f, 1.0f) * arrowLength;
-            XLineEnd = translation + XLineEnd;
-            YLineEnd = translation + YLineEnd;
-            ZLineEnd = translation + ZLineEnd;
+            XLineEnd = state.translation + XLineEnd;
+            YLineEnd = state.translation + YLineEnd;
+            ZLineEnd = state.translation + ZLineEnd;
         }
             break;
     }

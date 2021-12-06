@@ -8,10 +8,12 @@
 #pragma once
 
 #include <blazevg.hh>
+#include <glm/gtc/quaternion.hpp>
 
 enum class Control {
     None,
-    Center
+    Center,
+    SSOrbit
 };
 
 enum class GizmoTool {
@@ -26,8 +28,14 @@ struct GizmoState {
     bool isMouseOverControl = false;
     float lastMouseX = 0.0f;
     float lastMouseY = 0.0f;
-    glm::vec3 viewRight = glm::vec3(0.0f);
-    glm::vec3 viewUp = glm::vec3(0.0f);
+    glm::vec3 viewRight;
+    glm::vec3 viewUp;
+    glm::vec3 offset;
+    float z = 0.0f;
+    float angle = 0.0f;
+    glm::vec3 translation;
+    glm::vec3 scale;
+    glm::quat rotation;
 };
 
 void drawGizmos(bvg::Context& ctx, GizmoState& state, GizmoTool tool,
