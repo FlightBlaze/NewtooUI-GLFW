@@ -13,13 +13,26 @@
 enum class Control {
     None,
     Center,
-    SSOrbit
+    SSOrbit,
+    Orbit,
+    UniformScale
 };
 
 enum class GizmoTool {
     Translate,
     Rotate,
     Scale
+};
+
+enum class Axis {
+    X,
+    Y,
+    Z
+};
+
+struct Ray {
+    glm::vec3 origin;
+    glm::vec3 direction;
 };
 
 struct GizmoState {
@@ -34,9 +47,13 @@ struct GizmoState {
     float z = 0.0f;
     float startAngle = 0.0f;
     float angle = 0.0f;
+    glm::vec3 startPiePoint;
+    glm::vec3 piePoint;
     glm::vec3 translation;
     glm::vec3 scale;
     glm::quat rotation;
+    glm::vec2 mouse;
+    Axis axis;
 };
 
 void drawGizmos(bvg::Context& ctx, GizmoState& state, GizmoTool tool,
