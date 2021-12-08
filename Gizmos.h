@@ -10,12 +10,15 @@
 #include <blazevg.hh>
 #include <glm/gtc/quaternion.hpp>
 
+namespace gizmo {
+
 enum class Control {
     None,
     Center,
     SSOrbit,
     Orbit,
-    UniformScale
+    UniformScale,
+    Arrow
 };
 
 enum class GizmoTool {
@@ -60,3 +63,5 @@ void drawGizmos(bvg::Context& ctx, GizmoState& state, GizmoTool tool,
                 glm::mat4 viewproj, glm::mat4& model,
                 glm::vec3 eye, glm::vec3 target, glm::vec3 up,
                 bool isMouseDown, float mouseX, float mouseY);
+
+} // namespace gizmo

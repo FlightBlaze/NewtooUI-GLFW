@@ -7,6 +7,7 @@
 
 #include <Gizmos.h>
 #include <glm/gtx/transform.hpp>
+#include <glm/gtx/closest_point.hpp>
 #include <glm/gtx/matrix_transform_2d.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/vector_angle.hpp>
@@ -15,11 +16,9 @@
 #include <iostream>
 #include <MathExtras.h>
 
-void drawArrow(bvg::Context& ctx, float sx, float sy, float ex, float ey, float size) {
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(ex, ey);
-    ctx.stroke();
+namespace gizmo {
+
+void buildLineTriangleTip(bvg::Context& ctx, float sx, float sy, float ex, float ey, float size) {
     glm::vec2 endPos = glm::vec2(ex, ey);
     glm::vec2 endDir = glm::normalize(glm::vec2(ex - sx, ey - sy));
     glm::vec2 endLeft = glm::vec2(endDir.y, -endDir.x);
@@ -32,6 +31,14 @@ void drawArrow(bvg::Context& ctx, float sx, float sy, float ex, float ey, float 
     ctx.lineTo(B.x, B.y);
     ctx.lineTo(C.x, C.y);
     ctx.closePath();
+}
+
+void drawArrow(bvg::Context& ctx, float sx, float sy, float ex, float ey, float size) {
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    buildLineTriangleTip(ctx, sx, sy, ex, ey, size);
     ctx.convexFill();
 }
 
@@ -98,6 +105,28 @@ void drawGizmoArrow(bvg::Context& ctx, glm::mat4& viewproj,
         drawLineWithSquare(ctx, originS.x, originS.y, endS.x, endS.y, 12);
     else
         drawArrow(ctx, originS.x, originS.y, endS.x, endS.y, 16);
+}
+
+bool isMouseOverGizmoArrow(bvg::Context& ctx, glm::mat4& viewproj,
+                    glm::vec3 origin, glm::vec3 end,
+                    glm::vec2 mouse,
+                    bool forScaling = false) {
+    bool overlapsLine;
+    bool overlapsTip;
+    ctx.lineWidth = 14;
+    
+    glm::vec3 originS = worldToScreenSpace(ctx, origin, viewproj);
+    glm::vec3 endS = worldToScreenSpace(ctx, end, viewproj);
+    if(originS.z >= 1.0f || endS.z >= 1.0f)
+        return;
+    
+    ctx.beginPath();
+    ctx.moveTo(originS.x, originS.y);
+    ctx.lineTo(endS.x, endS.y);
+    overlapsLine = ctx.isPointInsideStroke(mouse.x, mouse.y);
+    buildLineTriangleTip(ctx, originS.x, originS.y, endS.x, endS.y, 16);
+    overlapsTip = ctx.isPointInsideConvexFill(mouse.x, mouse.y);
+    return overlapsLine || overlapsTip;
 }
 
 void drawGizmoCenter(bvg::Context& ctx, glm::mat4& viewproj,
@@ -269,6 +298,27 @@ void buildGizmoOrbit(bvg::Context& ctx, glm::mat4& viewproj,
             ctx.lineTo(ls.end.x, ls.end.y);
         }
         prevDeclined = false;
+    }
+}
+
+void drawGizmoOrbitBins(bvg::Context& ctx, glm::mat4& viewproj,
+                        glm::mat4& model, bvg::Color color,
+                        glm::vec3 viewDir,
+                        float lineWidth, int bins)
+{
+    ctx.lineWidth = lineWidth;
+    std::vector<glm::vec3> vertices = createCircle(bins);
+    for(int i = 0; i < vertices.size(); i++) {
+        glm::vec3 vertex = vertices.at(i);
+        glm::vec3 start = model * glm::vec4(vertex, 1.0f);
+        start += start * 0.1f;
+        glm::vec3 end = start + start * 0.2f;
+        start = worldToScreenSpace(ctx, start, viewproj);
+        end = worldToScreenSpace(ctx, end, viewproj);
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
     }
 }
 
@@ -542,6 +592,10 @@ color(color)
 }
 
 void PlaneDrawing::draw(bvg::Context& ctx, GizmoState& state) {
+    if(state.selectedControl == Control::Arrow ||
+       state.selectedControl == Control::Center) {
+        color.a *= 0.5f;
+    }
     drawGizmoPlane(ctx, viewproj, model, color);
 }
 
@@ -549,7 +603,9 @@ class ArrowDrawing : public Drawing {
 public:
     ArrowDrawing(glm::mat4& viewproj,
                  glm::vec3 origin, glm::vec3 end,
-                 bvg::Color color, glm::vec3 eye,
+                 bvg::Color color,
+                 Axis axis,
+                 glm::vec3 eye,
                  glm::vec3 target,
                  bool forScaling = false);
     
@@ -557,21 +613,27 @@ public:
     glm::vec3 origin;
     glm::vec3 end;
     bvg::Color color;
+    Axis axis;
     bool forScaling;
     
     void draw(bvg::Context& ctx, GizmoState& state);
+    bool mouseEvent(bvg::Context& ctx, GizmoState& state, glm::mat4& model,
+                    bool isMouseDown, float mouseX, float mouseY);
 };
 
 ArrowDrawing::ArrowDrawing(glm::mat4& viewproj,
                            glm::vec3 origin, glm::vec3 end,
-                           bvg::Color color, glm::vec3 eye,
+                           bvg::Color color,
+                           Axis axis,
+                           glm::vec3 eye,
                            glm::vec3 target,
                            bool forScaling):
 viewproj(viewproj),
 origin(origin),
 end(end),
 color(color),
-forScaling(forScaling)
+forScaling(forScaling),
+axis(axis)
 {
     glm::vec3 center = (origin + end) / 2.0f;
     glm::vec3 arrowDir = glm::normalize(end - origin);
@@ -584,7 +646,53 @@ forScaling(forScaling)
 }
 
 void ArrowDrawing::draw(bvg::Context& ctx, GizmoState& state) {
+    if((state.selectedControl == Control::Arrow
+         && state.axis != axis) ||
+       state.selectedControl == Control::Center) {
+        color.a *= 0.5f;
+    }
     drawGizmoArrow(ctx, viewproj, origin, end, color, forScaling);
+}
+
+glm::vec3 projectMouseOnLine(bvg::Context& ctx, glm::vec3 mouse, glm::mat4& viewproj,
+                             glm::vec3 lineOrigin, glm::vec3 lineDir)
+{
+    glm::vec3 world = screenToWorldSpace(ctx, mouse, viewproj);
+    return glm::closestPointOnLine(world, lineOrigin - lineDir * 1000.0f,
+                                   lineOrigin + lineDir * 1000.0f);
+}
+
+bool ArrowDrawing::mouseEvent(bvg::Context& ctx, GizmoState& state, glm::mat4& model,
+                              bool isMouseDown, float mouseX, float mouseY)
+{
+    float z = worldToScreenSpace(ctx, origin, viewproj).z;
+    glm::vec3 mouse = glm::vec3(mouseX, mouseY, z);
+    glm::vec3 lineDir = glm::normalize(end - origin);
+    
+    glm::vec3 projectedPoint = projectMouseOnLine(ctx, mouse, viewproj, origin, lineDir);
+    
+    if(state.selectedControl == Control::Arrow &&
+       state.axis == axis) {
+        glm::vec3 differenceOld = state.offset - state.translation;
+        glm::vec3 differenceNew = projectedPoint - state.translation;
+        model = glm::translate(differenceNew) *
+            glm::translate(-differenceOld) * model;
+        state.offset = projectedPoint;
+    }
+    
+    if(isMouseOverGizmoArrow(ctx, viewproj, origin, end, mouse)) {
+        if(!isMouseDown) {
+            state.controlOverMouse = Control::Arrow;
+            return true;
+        }
+        if(state.controlOverMouse == Control::Arrow &&
+           state.selectedControl != Control::Arrow) {
+            state.selectedControl = Control::Arrow;
+            state.axis = axis;
+            state.offset = projectedPoint;
+        }
+        return true;
+    }
 }
 
 class CenterDrawing : public Drawing {
@@ -617,6 +725,9 @@ void CenterDrawing::draw(bvg::Context& ctx, GizmoState& state) {
     bvg::Color currentColor = this->color;
     if(state.selectedControl == Control::Center) {
         currentColor = bvg::Color::lerp(this->color, bvg::colors::White, 0.5f);
+    }
+    else if(state.selectedControl == Control::Arrow) {
+        currentColor.a *= 0.5f;
     }
     drawGizmoCenter(ctx, viewproj, center, currentColor);
 }
@@ -686,16 +797,65 @@ void OrbitDrawing::draw(bvg::Context& ctx, GizmoState& state) {
     if(state.selectedControl == Control::Orbit &&
        state.axis != axis &&
        state.startAngle != state.angle) {
-        color.a *= 0.2f;
+        color.a *= 0.5f;
+    }
+    else if(state.selectedControl == Control::SSOrbit &&
+            state.startAngle != state.angle) {
+        color.a *= 0.5;
     }
     bool isCurrentSelected = state.selectedControl == Control::Orbit &&
         state.axis == axis && state.startAngle != state.angle;
+    
+//    glm::vec3 center = this->model * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+//    glm::vec3 centerUp = this->model * glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+//    glm::vec3 up = glm::normalize(centerUp - center);
+//
+//    glm::mat4 newModel = glm::translate(state.translation) *
+//        glm::toMat4(glm::quatLookAt(up, glm::vec3(0.0f, 1.0f, 0.0f))) *
+//        glm::scale(glm::vec3(2.0f));
+    
     drawGizmoOrbit(ctx, viewproj, model, color, viewDir, isCurrentSelected);
     if(isCurrentSelected) {
+        float startAngle = angleOnOrbit(ctx, model, viewproj, state.startPiePoint);
+        float endAngle = angleOnOrbit(ctx, model, viewproj, state.piePoint);
+        
         drawGizmoOrbitPie(ctx, model, viewproj,
-                          angleOnOrbit(ctx, model, viewproj, state.startPiePoint),
-                          angleOnOrbit(ctx, model, viewproj, state.piePoint),
+                          startAngle,
+                          endAngle,
                           color, eye);
+            
+        glm::vec3 basis;
+        switch (axis) {
+            case Axis::X:
+                basis = glm::vec3(0.0f, -1.0f, 0.0f);
+                break;
+            case Axis::Y:
+                basis = glm::vec3(1.0f, 0.0f, 0.0f);
+                break;
+            case Axis::Z:
+                basis = glm::vec3(0.0f, 0.0f, -1.0f);
+                break;
+        }
+        
+//        glm::vec3 center = this->model * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+//        glm::vec3 centerUp = this->model * glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+//        glm::vec3 up = glm::normalize(centerUp - center);
+//
+//        float side = glm::dot(up, viewDir);
+//        float relativeAngle = state.startAngle - state.angle;
+//        if(side > 0.0f)
+//            relativeAngle = -relativeAngle;
+//
+//        glm::mat4 binsModel =
+//            glm::translate(state.translation) *
+//            glm::toMat4(state.rotation) *
+//            glm::rotate(relativeAngle, basis) *
+//            glm::toMat4(glm::inverse(state.rotation)) *
+//            glm::translate(-state.translation) *
+//            model;
+    
+        drawGizmoOrbitBins(ctx, viewproj, model, color, viewDir,
+                           3.0f, 16);
     }
 }
 
@@ -717,18 +877,24 @@ bool OrbitDrawing::mouseEvent(bvg::Context& ctx, GizmoState& state,
     
     if(state.selectedControl == Control::Orbit &&
        state.axis == axis) {
+        float currentAngle = 0.0f;
         glm::vec3 basis;
         switch (axis) {
             case Axis::X:
                 basis = glm::vec3(0.0f, -1.0f, 0.0f);
+                currentAngle = glm::yaw(state.rotation);
                 break;
             case Axis::Y:
                 basis = glm::vec3(1.0f, 0.0f, 0.0f);
+                currentAngle = glm::pitch(state.rotation);
                 break;
             case Axis::Z:
                 basis = glm::vec3(0.0f, 0.0f, -1.0f);
+                currentAngle = glm::roll(state.rotation);
                 break;
         }
+        float bins = floorf(currentAngle / M_PI_4);
+        float discreteAngle = bins * M_PI_4;
         model =
             glm::translate(state.translation) *
             glm::toMat4(state.rotation) *
@@ -815,6 +981,10 @@ eye(eye)
 }
 
 void ScreenSpaceOrbitDrawing::draw(bvg::Context& ctx, GizmoState& state) {
+    if(state.selectedControl == Control::Orbit &&
+       state.startAngle != state.angle) {
+        color.a *= 0.5f;
+    }
     if(state.selectedControl == Control::SSOrbit) {
         float arcLength = -state.startAngle + state.angle;
         float fullArcs;
@@ -931,6 +1101,145 @@ bool DrawingWrapper::operator > (const DrawingWrapper& other) const {
     return this->drawing->distanceToEye > other.drawing->distanceToEye;
 }
 
+void drawButton(bvg::Context& ctx, bvg::Color color, float buttonSize, float padding) {
+    ctx.fillStyle = bvg::SolidColor(color);
+    ctx.beginPath();
+    ctx.rect(0, 0, buttonSize, buttonSize, 14);
+    ctx.convexFill();
+}
+
+void drawMoveButton(bvg::Context& ctx, bvg::Color color, float buttonSize, float padding,
+                    glm::vec3 origin, glm::vec3 direction,
+                    glm::mat4 viewproj, glm::vec3 eye, glm::vec3 target) {
+    bvg::Color buttonColor = color;
+    buttonColor.a = 0.333f;
+    drawButton(ctx, buttonColor, buttonSize, padding);
+    bvg::Style iconStyle = bvg::SolidColor(color);
+    ctx.strokeStyle = iconStyle;
+    ctx.fillStyle = iconStyle;
+    ctx.lineWidth = 2.0f;
+    float arrowLength = 24;
+    glm::vec2 center = glm::vec2(buttonSize) / 2.0f;
+    glm::vec2 targetS = worldToScreenSpace(ctx, target + origin, viewproj);
+    glm::vec2 vectorS = worldToScreenSpace(ctx, target + origin + direction, viewproj);
+    glm::vec2 arrowDirection = glm::normalize(vectorS - targetS);
+    glm::vec2 start = center - arrowDirection * arrowLength / 2.0f;
+    glm::vec2 end = center + arrowDirection * (arrowLength / 2.0f - 12);
+    drawArrow(ctx, start.x, start.y, end.x, end.y, 8);
+    ctx.translate(buttonSize + padding, 0.0f);
+}
+
+void drawRotateButton(bvg::Context& ctx, bvg::Color color, float buttonSize, float padding,
+                    glm::vec3 origin, glm::mat4 model,
+                    glm::mat4 viewproj, glm::vec3 eye, glm::vec3 target) {
+    bvg::Color buttonColor = color;
+    buttonColor.a = 0.333f;
+    drawButton(ctx, buttonColor, buttonSize, padding);
+    bvg::Style iconStyle = bvg::SolidColor(color);
+    ctx.strokeStyle = iconStyle;
+    ctx.fillStyle = iconStyle;
+    ctx.lineWidth = 2.0f;
+    float arrowLength = 24;
+    glm::vec2 center = glm::vec2(buttonSize) / 2.0f;
+    glm::vec3 targetS = worldToScreenSpace(ctx, target, viewproj);
+    
+    float radius = glm::distance(target, eye) / 48.0f;
+    
+//    std::vector<glm::vec3> vertices = createCircle(16, 0.0f, M_PI * 2.0f - M_PI_2);
+    std::vector<glm::vec3> vertices = createCircle(16, M_PI * 2.0f - M_PI_2 * 0.667f, 0.0f);
+    for(int i = 0; i < vertices.size(); i++) {
+        glm::vec3& v = vertices.at(i);
+        v *= radius;
+        v = model * glm::vec4(v, 1.0f);
+        v = worldToScreenSpace(ctx, v, viewproj) - targetS + glm::vec3(center, 0.0f);
+    }
+    
+    ctx.beginPath();
+    glm::vec3& first = vertices.front();
+    ctx.moveTo(first.x, first.y);
+    for(int i = 1; i < vertices.size(); i++) {
+        glm::vec3& v = vertices.at(i);
+        ctx.lineTo(v.x, v.y);
+    }
+    ctx.stroke();
+    glm::vec3& beforelast = vertices.at(vertices.size() - 2);
+    glm::vec3& last = vertices.at(vertices.size() - 1);
+    glm::vec3 lastPointingFirst = beforelast + (first - beforelast) * 0.01f;;
+    glm::vec3 end = glm::mix(last, lastPointingFirst, 0.9f);
+    buildLineTriangleTip(ctx, beforelast.x, beforelast.y, end.x, end.y, 6);
+    ctx.convexFill();
+    
+    ctx.translate(buttonSize + padding, 0.0f);
+}
+
+void drawGizmosNew(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
+                   glm::mat4 viewproj, glm::mat4& model,
+                   glm::vec3 eye, glm::vec3 target, glm::vec3 up,
+                   bool isMouseDown, float mouseX, float mouseY) {
+    glm::vec3 center = model * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    glm::vec2 centerS = worldToScreenSpace(ctx, center, viewproj);
+    ctx.beginPath();
+    ctx.clearTransform();
+    ctx.translate(centerS.x, centerS.y);
+    float buttonSize = 40.0f;
+    float padding = 6.0f;
+    float width = padding + (buttonSize + padding) * 3.0f;
+    float height = buttonSize + padding * 2.0f;
+    float offsetY = 60.0f;
+    bvg::Color panelColor = bvg::Color(0.8f, 0.8f, 0.8f);
+    ctx.fillStyle = bvg::SolidColor(panelColor);
+    ctx.rect(-width / 2.0f, offsetY, width, height, 18);
+    ctx.convexFill();
+    ctx.translate(0.0f, offsetY - 15);
+    ctx.beginPath();
+    ctx.moveTo(-20, 15);
+    ctx.cubicTo(-5, 15, -5, 0, 0, 0);
+    ctx.cubicTo(5, 0, 5, 15, 20, 15);
+    ctx.fill();
+    ctx.clearTransform();
+    ctx.translate(centerS.x, centerS.y);
+    ctx.translate(-width / 2.0f + padding, offsetY + padding);
+    bvg::Color XColor = bvg::Color(1.0f, 0.2f, 0.2f);
+    bvg::Color YColor = bvg::Color(0.1f, 0.6f, 0.1f);
+    bvg::Color ZColor = bvg::Color(0.2f, 0.2f, 1.0f);
+    switch(tool) {
+        case GizmoTool::Translate:
+        {
+            glm::vec3 X = state.rotation * glm::vec3(0, 0, 1);
+            glm::vec3 Y = state.rotation * glm::vec3(0, 1, 0);
+            glm::vec3 Z = state.rotation * glm::vec3(1, 0, 0);
+            
+            drawMoveButton(ctx, ZColor, buttonSize, padding, center, X, viewproj, eye, target);
+            drawMoveButton(ctx, YColor, buttonSize, padding, center, Y, viewproj, eye, target);
+            drawMoveButton(ctx, XColor, buttonSize, padding, center, Z, viewproj, eye, target);
+        }
+            break;
+        case GizmoTool::Rotate:
+        {
+            glm::mat4 rotationMat = glm::toMat4(state.rotation);
+            
+            glm::mat4 XOrbitMat =
+                rotationMat;
+            glm::mat4 YOrbitMat =
+                rotationMat *
+                glm::rotate((float)M_PI_2, glm::vec3(0.0f, 0.0f, 1.0f));
+            glm::mat4 ZOrbitMat =
+                rotationMat *
+                glm::rotate((float)M_PI_2, glm::vec3(1.0f, 0.0f, 0.0f));
+            
+            drawRotateButton(ctx, ZColor, buttonSize, padding, center,
+                             ZOrbitMat, viewproj, eye, target);
+            drawRotateButton(ctx, YColor, buttonSize, padding, center,
+                             YOrbitMat, viewproj, eye, target);
+            drawRotateButton(ctx, XColor, buttonSize, padding, center,
+                             XOrbitMat, viewproj, eye, target);
+        }
+            break;
+        case GizmoTool::Scale:
+            break;
+    }
+};
+
 void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
                 glm::mat4 viewproj, glm::mat4& model,
                 glm::vec3 eye, glm::vec3 target, glm::vec3 up,
@@ -1014,9 +1323,12 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
                 glm::scale(glm::vec3(planeSize));
             
             drawings = {
-                DrawingWrapper(new ArrowDrawing(viewproj, center, XArrowEnd, XColor, eye, target)),
-                DrawingWrapper(new ArrowDrawing(viewproj, center, YArrowEnd, YColor, eye, target)),
-                DrawingWrapper(new ArrowDrawing(viewproj, center, ZArrowEnd, ZColor, eye, target)),
+                DrawingWrapper(new ArrowDrawing(viewproj, center, XArrowEnd, XColor,
+                                                Axis::X, eye, target)),
+                DrawingWrapper(new ArrowDrawing(viewproj, center, YArrowEnd, YColor,
+                                                Axis::Y, eye, target)),
+                DrawingWrapper(new ArrowDrawing(viewproj, center, ZArrowEnd, ZColor,
+                                                Axis::Z, eye, target)),
                 DrawingWrapper(new PlaneDrawing(viewproj, XPlaneMat, XColor, eye, target)),
                 DrawingWrapper(new PlaneDrawing(viewproj, YPlaneMat, YColor, eye, target)),
                 DrawingWrapper(new PlaneDrawing(viewproj, ZPlaneMat, ZColor, eye, target)),
@@ -1034,9 +1346,16 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
             SSOrbitColor.a *= opacity;
             ArcballColor.a *= opacity;
             
+            float XRot = glm::pitch(state.rotation);
+            float YRot = glm::yaw(state.rotation);
+            float ZRot = glm::roll(state.rotation);
+            
+//            std::cout << "Yaw: " << XRot << " Pitch: " << YRot << " Roll: " << ZRot << std::endl;
+            
             glm::mat4 XOrbitMat =
                 glm::translate(state.translation) *
                 rotationMat *
+//                glm::toMat4(glm::quat(glm::vec3(XRot, 0.0f, ZRot))) *
                 glm::scale(glm::vec3(orbitRadius));
             glm::mat4 YOrbitMat =
                 glm::translate(state.translation) *
@@ -1072,11 +1391,11 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
             
             drawings = {
                 DrawingWrapper(new ArrowDrawing(viewproj, center, XLineEnd, XColor,
-                                                eye, target, true)),
+                                                Axis::X, eye, target, true)),
                 DrawingWrapper(new ArrowDrawing(viewproj, center, YLineEnd, YColor,
-                                                eye, target, true)),
-                DrawingWrapper(new ArrowDrawing(viewproj, center, ZLineEnd, ZColor, eye,
-                                                target, true)),
+                                                Axis::Y, eye, target, true)),
+                DrawingWrapper(new ArrowDrawing(viewproj, center, ZLineEnd, ZColor,
+                                                Axis::Z, eye, target, true)),
                 DrawingWrapper(new UniformScaleDrawing(viewproj, center, centerColor, eye))
             };
         }
@@ -1103,6 +1422,12 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
         delete drawingw.drawing;
     drawings.clear();
     
+    drawGizmosNew(ctx, state, tool, viewproj, model,
+                  eye, target, up,
+                  isMouseDown, mouseX, mouseY);
+    
     state.lastMouseX = mouseX;
     state.lastMouseY = mouseY;
 }
+
+} // namespace gizmo

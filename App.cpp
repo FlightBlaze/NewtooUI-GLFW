@@ -78,11 +78,11 @@ int App::run()
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
                     mIsControlPressed = true;
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_T)
-                    mGizmoTool = GizmoTool::Translate;
+                    mGizmoTool = gizmo::GizmoTool::Translate;
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_R)
-                    mGizmoTool = GizmoTool::Rotate;
+                    mGizmoTool = gizmo::GizmoTool::Rotate;
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_S)
-                    mGizmoTool = GizmoTool::Scale;
+                    mGizmoTool = gizmo::GizmoTool::Scale;
                 break;
             case SDL_KEYUP:
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
@@ -129,7 +129,7 @@ int App::run()
                         redrawRay = true;
                         rayX = currentEvent.motion.x;
                         rayY = currentEvent.motion.y;
-                        if(mGizmoState.selectedControl == Control::None) {
+                        if(mGizmoState.selectedControl == gizmo::Control::None) {
                             mYaw -= glm::radians((float)currentEvent.motion.xrel) * 25.0f;
                             mPitch += glm::radians((float)currentEvent.motion.yrel) * 25.0f;
                         }
@@ -336,7 +336,7 @@ void App::draw()
     
     bool blockMouseEvent = mIsControlPressed;
     
-    drawGizmos(bvgCtx, mGizmoState, mGizmoTool, vp, mModel, eye, glm::vec3(0.0f), up,
+    gizmo::drawGizmos(bvgCtx, mGizmoState, mGizmoTool, vp, mModel, eye, glm::vec3(0.0f), up,
                blockMouseEvent ? false : isMouseDown, mMouseX, mMouseY);
     
 //    bvgCtx.beginPath();
