@@ -18,7 +18,8 @@ enum class Control {
     SSOrbit,
     Orbit,
     UniformScale,
-    Arrow
+    Arrow,
+    Arcball
 };
 
 enum class GizmoTool {
@@ -57,6 +58,8 @@ struct GizmoState {
     glm::vec2 mouse;
     Axis axis;
     bool isRotationSnapping = false;
+    glm::vec3 viewRight;
+    glm::vec3 viewUp;
 };
 
 struct GizmoProperties {

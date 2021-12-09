@@ -341,16 +341,6 @@ bool isMouseOverGizmoOrbit(bvg::Context& ctx, glm::mat4& viewproj,
     return ctx.isPointInsideStroke(mouse.x, mouse.y);
 }
 
-void drawGizmoArcball(bvg::Context& ctx, glm::vec3 center, glm::mat4& viewproj,
-                      float radius, bvg::Color color) {
-    color.a *= 0.5f;
-    glm::vec3 centerS = worldToScreenSpace(ctx, center, viewproj);
-    ctx.fillStyle = bvg::SolidColor(color);
-    ctx.beginPath();
-    ctx.arc(centerS.x, centerS.y, radius, 0.0f, M_PI * 2.0f);
-    ctx.convexFill();
-}
-
 glm::vec3 vertexLookAtEye(glm::vec3 v, glm::vec3& eye, glm::vec3& center) {
     v = glm::quat(glm::vec3(M_PI_2, 0.0f, 0.0f)) * v;
     v = glm::quatLookAt(glm::normalize(center - eye), glm::vec3(0.0f, 1.0f, 0.0f)) *
@@ -390,6 +380,20 @@ void drawGizmoScreenSpaceOrbit(bvg::Context& ctx, glm::vec3 center, glm::mat4& v
     buildGizmoScreenSpaceOrbit(ctx, center, viewproj, radius, eye, 48, 5.0f);
     ctx.strokeStyle = bvg::SolidColor(color);
     ctx.stroke();
+}
+
+void drawGizmoArcball(bvg::Context& ctx, glm::vec3 center, glm::mat4& viewproj,
+                      float radius, bvg::Color color, glm::vec3 eye) {
+    color.a *= 0.5f;
+    buildGizmoScreenSpaceOrbit(ctx, center, viewproj, radius, eye, 32, 5.0f);
+    ctx.fillStyle = bvg::SolidColor(color);
+    ctx.convexFill();
+}
+
+bool isMouseOverGizmoArcball(bvg::Context& ctx, glm::vec3 center, glm::mat4& viewproj,
+                             float radius, glm::vec3 eye, glm::vec2 mouse) {
+    buildGizmoScreenSpaceOrbit(ctx, center, viewproj, radius, eye, 16, 5.0f);
+    return ctx.isPointInsideFill(mouse.x, mouse.y);
 }
 
 void drawGizmoScreenSpaceOrbitPie(bvg::Context& ctx, glm::vec3 center, glm::mat4& viewproj,
@@ -813,7 +817,10 @@ void OrbitDrawing::draw(bvg::Context& ctx, GizmoState& state) {
     }
     else if(state.selectedControl == Control::SSOrbit &&
             state.startAngle != state.angle) {
-        color.a *= 0.5;
+        color.a *= 0.5f;
+    }
+    else if(state.selectedControl == Control::Arcball) {
+        color.a *= 0.5f;
     }
     bool isCurrentSelected = state.selectedControl == Control::Orbit &&
         state.axis == axis && state.startAngle != state.angle;
@@ -978,6 +985,7 @@ bool OrbitDrawing::mouseEvent(bvg::Context& ctx, GizmoState& state,
             state.axis = axis;
             state.angle = angle;
             state.startAngle = angle;
+            state.rotatedAngle = 0.0f;
             state.startPiePoint = projectScreenPointOnPlane(ctx, mouse, viewproj, center, up);
             return true;
         }
@@ -993,9 +1001,13 @@ public:
     glm::mat4& viewproj;
     glm::vec3 center;
     bvg::Color color;
+    glm::vec3 eye;
     float radius;
     
     void draw(bvg::Context& ctx, GizmoState& state);
+    bool mouseEvent(bvg::Context& ctx, GizmoState& state,
+                    glm::mat4& model, bool isMouseDown,
+                    float mouseX, float mouseY);
 };
 
 ArcballDrawing::ArcballDrawing(glm::mat4& viewproj, glm::vec3 center,
@@ -1003,15 +1015,49 @@ ArcballDrawing::ArcballDrawing(glm::mat4& viewproj, glm::vec3 center,
 viewproj(viewproj),
 color(color),
 radius(radius),
-center(center)
+center(center),
+eye(eye)
 {
     this->distanceToEye = glm::distance(center, eye);
 }
 
 void ArcballDrawing::draw(bvg::Context& ctx, GizmoState& state) {
     bvg::Color currentColor = color;
-    currentColor.a = 0.0f;
-    drawGizmoArcball(ctx, center, viewproj, radius, currentColor);
+//    currentColor.a = 0.0f;
+    if(state.selectedControl == Control::Arcball) {
+        drawGizmoArcball(ctx, center, viewproj, radius, currentColor, eye);
+    }
+}
+
+bool ArcballDrawing::mouseEvent(bvg::Context& ctx, GizmoState& state,
+                                glm::mat4& model, bool isMouseDown,
+                                float mouseX, float mouseY) {
+    glm::vec2 mouse = glm::vec2(mouseX, mouseY);
+    glm::vec2 lastMouse = glm::vec2(state.lastMouseX, state.lastMouseY);
+    glm::vec2 relMouse = mouse - lastMouse;
+    
+    const float revolutionPx = 60.0f;
+    const float sensitivity = 1.0f / M_PI * 2.0f / revolutionPx;
+    
+    if(state.selectedControl == Control::Arcball) {
+        model =
+            glm::translate(state.translation) *
+            glm::rotate(relMouse.x * sensitivity, state.viewUp) *
+            glm::rotate(-relMouse.y * sensitivity, state.viewRight) *
+            glm::translate(-state.translation) *
+            model;
+    }
+    
+    if(isMouseOverGizmoArcball(ctx, center, viewproj, radius, eye, mouse)) {
+        if(!isMouseDown) {
+            state.controlOverMouse = Control::Arcball;
+            return true;
+        }
+        if(state.controlOverMouse == Control::Arcball &&
+           state.selectedControl != Control::Arcball) {
+            state.selectedControl = Control::Arcball;
+        }
+    }
 }
 
 class ScreenSpaceOrbitDrawing : public Drawing {
@@ -1042,7 +1088,8 @@ eye(eye)
 }
 
 void ScreenSpaceOrbitDrawing::draw(bvg::Context& ctx, GizmoState& state) {
-    if(state.selectedControl == Control::Orbit &&
+    if(state.selectedControl != Control::None &&
+       state.selectedControl != Control::SSOrbit &&
        state.startAngle != state.angle) {
         color.a *= 0.5f;
     }
@@ -1339,6 +1386,10 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
     
     state.mouse = glm::vec2(mouseX, mouseY);
     state.isRotationSnapping = props.enabledRotationSnap;
+    
+    glm::vec3 viewForward = glm::normalize(target - eye);
+    state.viewRight = glm::normalize(glm::cross(up, viewForward));
+    state.viewUp = glm::cross(viewForward, state.viewRight);
     
     std::vector<DrawingWrapper> drawings;
     
