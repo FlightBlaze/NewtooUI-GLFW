@@ -44,10 +44,9 @@ struct GizmoState {
     bool isMouseOverControl = false;
     float lastMouseX = 0.0f;
     float lastMouseY = 0.0f;
-    glm::vec3 viewRight;
-    glm::vec3 viewUp;
     glm::vec3 offset;
     float z = 0.0f;
+    float rotatedAngle = 0.0f;
     float startAngle = 0.0f;
     float angle = 0.0f;
     glm::vec3 startPiePoint;
@@ -57,9 +56,15 @@ struct GizmoState {
     glm::quat rotation;
     glm::vec2 mouse;
     Axis axis;
+    bool isRotationSnapping = false;
+};
+
+struct GizmoProperties {
+    bool enabledRotationSnap = false;
 };
 
 void drawGizmos(bvg::Context& ctx, GizmoState& state, GizmoTool tool,
+                GizmoProperties& props,
                 glm::mat4 viewproj, glm::mat4& model,
                 glm::vec3 eye, glm::vec3 target, glm::vec3 up,
                 bool isMouseDown, float mouseX, float mouseY);

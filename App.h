@@ -114,6 +114,7 @@ private:
     glm::mat4 mModel = glm::mat4(1.0f);
     gizmo::GizmoState mGizmoState;
     gizmo::GizmoTool mGizmoTool = gizmo::GizmoTool::Translate;
+    gizmo::GizmoProperties mGizmoProps;
     
 public:
     glm::vec2 mSquirclePos;

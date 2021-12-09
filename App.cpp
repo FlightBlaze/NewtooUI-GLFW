@@ -83,6 +83,8 @@ int App::run()
                     mGizmoTool = gizmo::GizmoTool::Rotate;
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_S)
                     mGizmoTool = gizmo::GizmoTool::Scale;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_N)
+                        mGizmoProps.enabledRotationSnap = !mGizmoProps.enabledRotationSnap;
                 break;
             case SDL_KEYUP:
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
@@ -336,8 +338,9 @@ void App::draw()
     
     bool blockMouseEvent = mIsControlPressed;
     
-    gizmo::drawGizmos(bvgCtx, mGizmoState, mGizmoTool, vp, mModel, eye, glm::vec3(0.0f), up,
-               blockMouseEvent ? false : isMouseDown, mMouseX, mMouseY);
+    gizmo::drawGizmos(bvgCtx, mGizmoState, mGizmoTool, mGizmoProps,
+                      vp, mModel, eye, glm::vec3(0.0f), up,
+                      blockMouseEvent ? false : isMouseDown, mMouseX, mMouseY);
     
 //    bvgCtx.beginPath();
 ////    bvgCtx.moveTo(-50, 50);

@@ -309,7 +309,7 @@ void drawGizmoOrbitBins(bvg::Context& ctx, glm::mat4& viewproj,
     color.a *= 0.75;
     ctx.strokeStyle = bvg::SolidColor(color);
     ctx.lineWidth = lineWidth;
-    std::vector<glm::vec3> vertices = createCircle(bins);
+    std::vector<glm::vec3> vertices = createCircle(bins + 1);
     for(int i = 0; i < vertices.size(); i++) {
         glm::vec3 vertex = vertices.at(i);
         glm::vec3 center = model * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -872,7 +872,7 @@ void OrbitDrawing::draw(bvg::Context& ctx, GizmoState& state) {
         
         drawGizmoOrbitPie(ctx, pieModel, viewproj,
                           0.0f,//startAngle,
-                          orientedAngle + disreteArcLength,//endAngle,
+                          -state.rotatedAngle + disreteArcLength,//endAngle,
                           color, eye);
             
         glm::vec3 basis;
@@ -905,8 +905,10 @@ void OrbitDrawing::draw(bvg::Context& ctx, GizmoState& state) {
 //            glm::translate(-state.translation) *
 //            model;
         
-        drawGizmoOrbitBins(ctx, viewproj, pieModel, color, viewDir,
-                           3.0f, 16);
+        if(state.isRotationSnapping) {
+            drawGizmoOrbitBins(ctx, viewproj, pieModel, color, viewDir,
+                               3.0f, 16);
+        }
     }
 }
 
@@ -925,35 +927,43 @@ bool OrbitDrawing::mouseEvent(bvg::Context& ctx, GizmoState& state,
     float side = glm::dot(up, viewDir);
     float orientedRelativeAngle = side > 0.0f ? -relativeAngle : relativeAngle;
     float angle = state.angle + relativeAngle;
+    float arc = state.angle - state.startAngle;
+    float orientedArc = side > 0.0f ? -arc : arc;
+    float newArc = 0.0f;
     
     if(state.selectedControl == Control::Orbit &&
-       state.axis == axis) {
-        float currentAngle = 0.0f;
+       state.axis == axis &&
+       state.startAngle != angle) {
         glm::vec3 basis;
         switch (axis) {
             case Axis::X:
                 basis = glm::vec3(0.0f, -1.0f, 0.0f);
-                currentAngle = glm::yaw(state.rotation);
                 break;
             case Axis::Y:
                 basis = glm::vec3(1.0f, 0.0f, 0.0f);
-                currentAngle = glm::pitch(state.rotation);
                 break;
             case Axis::Z:
                 basis = glm::vec3(0.0f, 0.0f, -1.0f);
-                currentAngle = glm::roll(state.rotation);
                 break;
         }
-        float bins = floorf(currentAngle / M_PI_4);
-        float discreteAngle = bins * M_PI_4;
+        float step = M_PI_4 / 2.0f;
+        float bins = floorf(orientedArc / step);
+        float discreteAngle = bins * step;
+        if(state.isRotationSnapping) {
+            newArc = discreteAngle;
+        } else {
+            newArc = orientedArc + orientedRelativeAngle;
+        }
         model =
             glm::translate(state.translation) *
             glm::toMat4(state.rotation) *
-            glm::rotate(orientedRelativeAngle, basis) *
+            glm::rotate(newArc, basis) *
+            glm::rotate(-state.rotatedAngle, basis) *
             glm::toMat4(glm::inverse(state.rotation)) *
             glm::translate(-state.translation) *
             model;
         state.angle = angle;
+        state.rotatedAngle = newArc;
         state.piePoint = projectScreenPointOnPlane(ctx, mouse, viewproj, center, up);
     }
     
@@ -1292,6 +1302,7 @@ void drawGizmosNew(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
 };
 
 void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
+                GizmoProperties& props,
                 glm::mat4 viewproj, glm::mat4& model,
                 glm::vec3 eye, glm::vec3 target, glm::vec3 up,
                 bool isMouseDown, float mouseX, float mouseY)
@@ -1327,10 +1338,7 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
     }
     
     state.mouse = glm::vec2(mouseX, mouseY);
-    
-    glm::vec3 viewForward = glm::normalize(target - eye);
-    state.viewRight = glm::normalize(glm::cross(up, viewForward));
-    state.viewUp = glm::cross(viewForward, state.viewRight);
+    state.isRotationSnapping = props.enabledRotationSnap;
     
     std::vector<DrawingWrapper> drawings;
     
