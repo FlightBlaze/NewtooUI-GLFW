@@ -132,10 +132,6 @@ bool isMouseOverGizmoArrow(bvg::Context& ctx, glm::mat4& viewproj,
 void drawGizmoCenter(bvg::Context& ctx, glm::mat4& viewproj,
                      glm::vec3 center, bvg::Color color) {
     glm::vec2 centerS = worldToScreenSpace(ctx, center, viewproj);
-    ctx.fillStyle = bvg::SolidColor(color);
-    ctx.beginPath();
-    ctx.arc(centerS.x, centerS.y, 4.0f, 0.0f, M_PI * 2.0f);
-    ctx.convexFill();
     
     bvg::Color fillColor = color;
     fillColor.a *= 0.5f;
@@ -162,10 +158,6 @@ bool isMouseOverGizmoCenter(bvg::Context& ctx, glm::mat4& viewproj,
 void drawGizmoUniformScale(bvg::Context& ctx, glm::mat4& viewproj,
                      glm::vec3 center, bvg::Color color) {
     glm::vec2 centerS = worldToScreenSpace(ctx, center, viewproj);
-    ctx.fillStyle = bvg::SolidColor(color);
-    ctx.beginPath();
-    ctx.arc(centerS.x, centerS.y, 4.0f, 0.0f, M_PI * 2.0f);
-    ctx.convexFill();
     
     bvg::Color fillColor = color;
     fillColor.a *= 0.5f;
@@ -191,7 +183,7 @@ void drawGizmoPlane(bvg::Context& ctx, glm::mat4& viewproj,
         glm::vec3 proj = worldToScreenSpace(ctx, model * glm::vec4(vertices.at(i), 1.0f), viewproj);
         
         // If one of the vertices is too near to the
-        //camera then then don't render the plane
+        // camera then then don't render the plane
         if(proj.z >= 1.0f)
             return;
         
@@ -1408,12 +1400,19 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
     switch (tool) {
         case GizmoTool::Translate:
         {
+            float arrowStartAt = 0.5f;
             glm::vec3 XArrowEnd = glm::vec3(1.0f, 0.0f, 0.0f) * arrowLength;
             glm::vec3 YArrowEnd = glm::vec3(0.0f, 1.0f, 0.0f) * arrowLength;
             glm::vec3 ZArrowEnd = glm::vec3(0.0f, 0.0f, 1.0f) * arrowLength;
+            glm::vec3 XArrowStart = XArrowEnd * arrowStartAt;
+            glm::vec3 YArrowStart = YArrowEnd * arrowStartAt;
+            glm::vec3 ZArrowStart = ZArrowEnd * arrowStartAt;
             XArrowEnd = state.translation + state.rotation * XArrowEnd;
             YArrowEnd = state.translation + state.rotation * YArrowEnd;
             ZArrowEnd = state.translation + state.rotation * ZArrowEnd;
+            XArrowStart = state.translation + state.rotation * XArrowStart;
+            YArrowStart = state.translation + state.rotation * YArrowStart;
+            ZArrowStart = state.translation + state.rotation * ZArrowStart;
             glm::mat4 XPlaneMat =
                 glm::translate(state.translation) *
                 rotationMat *
@@ -1433,11 +1432,11 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
                 glm::scale(glm::vec3(planeSize));
             
             drawings = {
-                DrawingWrapper(new ArrowDrawing(viewproj, center, XArrowEnd, XColor,
+                DrawingWrapper(new ArrowDrawing(viewproj, XArrowStart, XArrowEnd, XColor,
                                                 Axis::X, eye, target)),
-                DrawingWrapper(new ArrowDrawing(viewproj, center, YArrowEnd, YColor,
+                DrawingWrapper(new ArrowDrawing(viewproj, YArrowStart, YArrowEnd, YColor,
                                                 Axis::Y, eye, target)),
-                DrawingWrapper(new ArrowDrawing(viewproj, center, ZArrowEnd, ZColor,
+                DrawingWrapper(new ArrowDrawing(viewproj, ZArrowStart, ZArrowEnd, ZColor,
                                                 Axis::Z, eye, target)),
                 DrawingWrapper(new PlaneDrawing(viewproj, XPlaneMat, XColor, eye, target)),
                 DrawingWrapper(new PlaneDrawing(viewproj, YPlaneMat, YColor, eye, target)),
@@ -1493,19 +1492,26 @@ void drawGizmos(bvg::Context& ctx,  GizmoState& state, GizmoTool tool,
             break;
         case GizmoTool::Scale:
         {
+            float lineStartAt = 0.5f;
             glm::vec3 XLineEnd = glm::vec3(1.0f, 0.0f, 0.0f) * arrowLength;
             glm::vec3 YLineEnd = glm::vec3(0.0f, 1.0f, 0.0f) * arrowLength;
             glm::vec3 ZLineEnd = glm::vec3(0.0f, 0.0f, 1.0f) * arrowLength;
+            glm::vec3 XLineStart = XLineEnd * lineStartAt;
+            glm::vec3 YLineStart = YLineEnd * lineStartAt;
+            glm::vec3 ZLineStart = ZLineEnd * lineStartAt;
             XLineEnd = state.translation + state.rotation * XLineEnd;
             YLineEnd = state.translation + state.rotation * YLineEnd;
             ZLineEnd = state.translation + state.rotation * ZLineEnd;
+            XLineStart = state.translation + state.rotation * XLineStart;
+            YLineStart = state.translation + state.rotation * YLineStart;
+            ZLineStart = state.translation + state.rotation * ZLineStart;
             
             drawings = {
-                DrawingWrapper(new ArrowDrawing(viewproj, center, XLineEnd, XColor,
+                DrawingWrapper(new ArrowDrawing(viewproj, XLineStart, XLineEnd, XColor,
                                                 Axis::X, eye, target, true)),
-                DrawingWrapper(new ArrowDrawing(viewproj, center, YLineEnd, YColor,
+                DrawingWrapper(new ArrowDrawing(viewproj, YLineStart, YLineEnd, YColor,
                                                 Axis::Y, eye, target, true)),
-                DrawingWrapper(new ArrowDrawing(viewproj, center, ZLineEnd, ZColor,
+                DrawingWrapper(new ArrowDrawing(viewproj, ZLineStart, ZLineEnd, ZColor,
                                                 Axis::Z, eye, target, true)),
                 DrawingWrapper(new UniformScaleDrawing(viewproj, center, centerColor, eye))
             };
