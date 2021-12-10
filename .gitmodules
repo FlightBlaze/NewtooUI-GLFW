@@ -25,3 +25,6 @@
 [submodule "submodules/jsoncpp"]
 	path = submodules/jsoncpp
 	url = https://github.com/open-source-parsers/jsoncpp.git
+[submodule "submodules/blazegizmo"]
+	path = submodules/blazegizmo
+	url = https://github.com/FlightBlaze/blazegizmo.git

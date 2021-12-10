@@ -17,7 +17,7 @@
 #include <string>
 #include <thread>
 #include <backends/diligent.hh>
-#include <Gizmos.h>
+#include <blazegizmo.hh>
 
 struct Vertex {
     glm::vec3 pos;
