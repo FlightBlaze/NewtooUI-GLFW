@@ -112,9 +112,12 @@ private:
     bool mIsControlPressed = false;
     
     glm::mat4 mModel = glm::mat4(1.0f);
+    gizmo::Transform mTransform;
     gizmo::GizmoState mGizmoState;
     gizmo::GizmoTool mGizmoTool = gizmo::GizmoTool::Translate;
     gizmo::GizmoProperties mGizmoProps;
+    bool mPlayRotation = false;
+    bool mDisplay3D = false;
     
 public:
     glm::vec2 mSquirclePos;

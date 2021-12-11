@@ -21,6 +21,8 @@ extern "C" {
 #include "Graphics/GraphicsTools/interface/MapHelper.hpp"
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/matrix_transform_2d.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <stb_image.h>
 #include <unistd.h>
@@ -83,8 +85,12 @@ int App::run()
                     mGizmoTool = gizmo::GizmoTool::Rotate;
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_S)
                     mGizmoTool = gizmo::GizmoTool::Scale;
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_N)
-                        mGizmoProps.enabledRotationSnap = !mGizmoProps.enabledRotationSnap;
+                if(currentEvent.key.keysym.scancode == SDL_SCANCODE_N)
+                    mGizmoProps.enabledRotationSnap = !mGizmoProps.enabledRotationSnap;
+                if(currentEvent.key.keysym.scancode == SDL_SCANCODE_SPACE)
+                    mPlayRotation = !mPlayRotation;
+                if(currentEvent.key.keysym.scancode == SDL_SCANCODE_G)
+                    mDisplay3D = !mDisplay3D;
                 break;
             case SDL_KEYUP:
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
@@ -324,160 +330,162 @@ void App::draw()
     
     bvgCtx.font = bvgCtx.fonts["roboto-regular"];
     
-    float eyeX = sin(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * mZoom;
-    float eyeY = sin(glm::radians(mPitch)) * mZoom;
-    float eyeZ = cos(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * mZoom;
-    glm::vec3 eye = glm::vec3(eyeX, eyeY, eyeZ);
-    
-    float normalizedPitch = degreesInRange(mPitch);
-    bool flipY = normalizedPitch < 90.0f || normalizedPitch >= 270.0f;
-    glm::vec3 up = glm::vec3(0.0, flipY ? 1.0 : -1.0, 0.0);
-    
-    glm::mat4 vp = glm::perspective(45.0f, (float)mWidth / (float)mHeight, 0.01f, 100.0f) *
-        glm::lookAt(eye, glm::vec3(0.0f), up);
-    
-    bool blockMouseEvent = mIsControlPressed;
-    
-    gizmo::drawGizmos(bvgCtx, mGizmoState, mGizmoTool, mGizmoProps,
-                      vp, mModel, eye, glm::vec3(0.0f), up,
-                      blockMouseEvent ? false : isMouseDown, mMouseX, mMouseY);
-    
-//    bvgCtx.beginPath();
-////    bvgCtx.moveTo(-50, 50);
-////    bvgCtx.cubicTo(-50, 0, 50, 0, 50, 50);
-////    bvgCtx.lineTo(0, 100);
-//    bvgCtx.moveTo(-50, 0);
-//    bvgCtx.lineTo(50, 0);
-//    bvgCtx.lineTo(50, 100);
-//    bvgCtx.lineTo(0, 50);
-//    bvgCtx.lineTo(-50, 100);
-//    bvgCtx.lineTo(-50, 0);
-//    bvgCtx.closePath();
-//
-//    bvgCtx.lineWidth = 8.0f;
-//    bvgCtx.lineDash = bvg::LineDash(12, 6);
-//    bvgCtx.lineDash.offset = sin(getTime()) * 80.0f;
-//    bvgCtx.lineJoin = bvg::LineJoin::Bevel;
-//    bvgCtx.lineCap = bvg::LineCap::Butt;
-//    bvgCtx.strokeStyle = bvg::LinearGradient(0, 0, 0, 100,
-//                                             bvg::Color(0.3f, 0.3f, 1.0f, 0.5f),
-//                                             bvg::Color(1.0f, 0.1f, 0.1f, 1.0f));
-//    bvgCtx.fillStyle = bvg::LinearGradient(-50, 20, 50, 100,
-//                                           bvg::colors::Black,
-//                                           bvg::colors::White);
-//    bvgCtx.rotate(mRotation);
-//    bvgCtx.translate(200, 100);
-//    bvgCtx.fill();
-//    bvgCtx.stroke();
-//
-//    bvgCtx.lineJoin = bvg::LineJoin::Miter;
-//
-//    bvg::Color red = bvg::Color(1.0f, 0.2f, 0.2f);
-//    bvg::Color blue = bvg::Color(0.2f, 0.2f, 1.0f);
-//
-//    float timeZeroOne = (sinf(getTime()) + 1.0f) / 2.0f;
-//
-//
-////    for(float i = 0; i < 360.0f + 1.0f; i++) {
-////        bvgCtx.clearTransform();
-////        bvgCtx.rotate(mRotation + glm::radians(i));
-////        bvgCtx.translate(400, 100);
-////        bvgCtx.fontSize = sinf(getTime()) / 2.0f * 40.0f + 40.0f;
-////        bvg::Color col = bvg::Color(0.2f, i / 360.0f, 1.0f);
-//////        bvgCtx.fillStyle = bvg::LinearGradient(0, 0, 0, bvgCtx.font->lineHeight,
-//////                                               red,
-//////                                               col);
-////        bvgCtx.fillStyle = bvg::SolidColor(col);
-////        bvgCtx.textFill(L"Привет мир!", 0, 0);
-////    }
-//
-//    bvgCtx.clearTransform();
-//    bvgCtx.translate(200, 400);
-//    bvgCtx.beginPath();
-//    bvgCtx.moveTo(0, 0);
-//    bvgCtx.cubicTo(50, -100, 100, 0, 200, 0);
-//    bvgCtx.cubicTo(230, -50, 450, 50, 500, 0);
-//    // bvgCtx.closePath();
-//    bvgCtx.lineDash = bvg::LineDash(8, 4);
-//    bvgCtx.fontSize = 32;
-//
-//    float t = (sin(getTime()) + 1.0f) / 2.0f;
-//    bvgCtx.fillStyle = bvg::SolidColor(bvg::Color::lerp(red, blue, t));
-//
-//    bvgCtx.textFillOnPath(L"Lorem ipsum dolor sit amet", sin(getTime()) * 80.0f + 80.0f, -4.0f);
-//    bvgCtx.lineWidth = 2.0f;
-//    bvgCtx.strokeStyle = bvg::SolidColor(bvg::colors::White);
-//    bvgCtx.stroke();
-//
-//    bvgCtx.clearTransform();
-//    bvgCtx.translate(600, 450);
-//    bvgCtx.beginPath();
-//    bvgCtx.lineTo(70, 100);
-//    bvgCtx.lineTo(-70, 100);
-//    bvgCtx.closePath();
-//    bvgCtx.lineDash = bvg::LineDash();
-//    bvgCtx.fillStyle = bvg::ConicGradient(0, 60, getTime() * 3.0f,
-//                                          red,
-//                                          blue);
-//    bvgCtx.convexFill();
-//    bvgCtx.lineWidth = 18;
-//    bvgCtx.strokeStyle = bvg::RadialGradient(0, 60, 140,
-//                                             red,
-//                                             blue);
-//
-//    float time = getTime();
-//    float timeCycle = 3;
-//    float timeWithinCycle = time - floorf(time / timeCycle) * timeCycle;
-//
-//    if(timeWithinCycle < 1.0f)
-//        bvgCtx.lineJoin = bvg::LineJoin::Miter;
-//    else if(timeWithinCycle < 2.0f)
-//        bvgCtx.lineJoin = bvg::LineJoin::Round;
-//    else
-//        bvgCtx.lineJoin = bvg::LineJoin::Bevel;
-//
-////    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(0.0f, 0.0f, 0.0f, 0.5f));
-//    bvgCtx.stroke();
-//
-//    bvgCtx.clearTransform();
-//    float fastTime = getTime() * 3.0f;
-//    bvgCtx.rotate(fastTime);
-//    bvgCtx.translate(400, 500);
-//    bvgCtx.beginPath();
-//    bvgCtx.arc(0.0f, 0.0f, 25.0f, -0.7f, M_PI * 1.5f);
-//    bvgCtx.lineDash = bvg::LineDash();
-//    bvgCtx.lineWidth = 8;
-//    bvgCtx.lineCap = bvg::LineCap::Round;
-//    bvg::Color blueTransparent = bvg::Color(0.2f, 0.2f, 1.0f, 0.0f);
-//    bvgCtx.strokeStyle = bvg::ConicGradient(0, 0, M_PI_2 + 0.3f,
-//                                            red,
-//                                            blueTransparent);
-//    bvgCtx.stroke();
-//
-//    bvgCtx.clearTransform();
-//    bvgCtx.translate(250, 500);
-//    bvgCtx.beginPath();
-//    bvgCtx.arc(0.0f, 0.0f, 50.0f, -2.0f, 3.0f);
-//    bvgCtx.lineTo(0, 0);
-//    bvgCtx.closePath();
-//    bvgCtx.fillStyle = bvg::SolidColor(bvg::Color(1.0f, 0.7f, 0.1f));
-//    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(1.0f, 0.2f, 0.1f));
-//    bvgCtx.lineWidth = 4;
-//    bvgCtx.fill();
-//    bvgCtx.stroke();
-//
-////    for(int i = 0; i < 360; i++) {
-////        bvgCtx.clearTransform();
-////        bvgCtx.rotate(glm::radians((float)i));
-////        bvgCtx.translate(30, 400);
-////        bvgCtx.beginPath();
-////        bvgCtx.rect(0, 0, 100, 60, 12);
-////        bvgCtx.fillStyle = bvg::SolidColor(bvg::Color(0.1f, 0.8f, 0.1f));
-////        bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(0.0f, 0.5f, 0.0f));
-////        // bvgCtx.lineDash = bvg::LineDash(8, 4);
-////        bvgCtx.convexFill();
-////        bvgCtx.stroke();
-////    }
+    if(mDisplay3D) {
+        float eyeX = sin(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * mZoom;
+        float eyeY = sin(glm::radians(mPitch)) * mZoom;
+        float eyeZ = cos(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * mZoom;
+        glm::vec3 eye = glm::vec3(eyeX, eyeY, eyeZ);
+        
+        float normalizedPitch = degreesInRange(mPitch);
+        bool flipY = normalizedPitch < 90.0f || normalizedPitch >= 270.0f;
+        glm::vec3 up = glm::vec3(0.0, flipY ? 1.0 : -1.0, 0.0);
+        
+        glm::mat4 vp = glm::perspective(45.0f, (float)mWidth / (float)mHeight, 0.01f, 100.0f) *
+            glm::lookAt(eye, glm::vec3(0.0f), up);
+        
+        bool blockMouseEvent = mIsControlPressed;
+        
+        if(mPlayRotation) {
+            mTransform.rotation = glm::slerp(mTransform.rotation, glm::quat(glm::vec3(0.0f)),
+                                             mDeltaTime * 3.0f);
+        }
+        
+        gizmo::drawGizmos(bvgCtx, mGizmoState, mGizmoTool, mGizmoProps,
+                          mTransform, vp, eye, glm::vec3(0.0f), up,
+                          blockMouseEvent ? false : isMouseDown, mMouseX, mMouseY);
+    }
+    else {
+        bvgCtx.beginPath();
+    //    bvgCtx.moveTo(-50, 50);
+    //    bvgCtx.cubicTo(-50, 0, 50, 0, 50, 50);
+    //    bvgCtx.lineTo(0, 100);
+        bvgCtx.moveTo(-50, 0);
+        bvgCtx.lineTo(50, 0);
+        bvgCtx.lineTo(50, 100);
+        bvgCtx.lineTo(0, 50);
+        bvgCtx.lineTo(-50, 100);
+        bvgCtx.lineTo(-50, 0);
+        bvgCtx.closePath();
+
+        bvgCtx.lineWidth = 8.0f;
+        bvgCtx.lineDash = bvg::LineDash(12, 6);
+        bvgCtx.lineDash.offset = sin(getTime()) * 80.0f;
+        bvgCtx.lineJoin = bvg::LineJoin::Bevel;
+        bvgCtx.lineCap = bvg::LineCap::Butt;
+        bvgCtx.strokeStyle = bvg::LinearGradient(0, 0, 0, 100,
+                                                 bvg::Color(0.3f, 0.3f, 1.0f, 0.5f),
+                                                 bvg::Color(1.0f, 0.1f, 0.1f, 1.0f));
+        bvgCtx.fillStyle = bvg::LinearGradient(-50, 20, 50, 100,
+                                               bvg::colors::Black,
+                                               bvg::colors::White);
+        bvgCtx.rotate(mRotation);
+        bvgCtx.translate(200, 100);
+        bvgCtx.fill();
+        bvgCtx.stroke();
+
+        bvgCtx.lineJoin = bvg::LineJoin::Miter;
+
+        bvg::Color red = bvg::Color(1.0f, 0.2f, 0.2f);
+        bvg::Color blue = bvg::Color(0.2f, 0.2f, 1.0f);
+
+        float timeZeroOne = (sinf(getTime()) + 1.0f) / 2.0f;
+
+
+        bvgCtx.clearTransform();
+        bvgCtx.rotate(mRotation);
+        bvgCtx.translate(400, 100);
+        bvgCtx.fontSize = sinf(getTime()) / 2.0f * 40.0f + 40.0f;
+        bvgCtx.fillStyle = bvg::LinearGradient(0, 0, 0, bvgCtx.font->lineHeight,
+                                               red,
+                                               blue);
+        bvgCtx.textFill(L"Привет мир!", 0, 0);
+
+        bvgCtx.clearTransform();
+        bvgCtx.translate(200, 400);
+        bvgCtx.beginPath();
+        bvgCtx.moveTo(0, 0);
+        bvgCtx.cubicTo(50, -100, 100, 0, 200, 0);
+        bvgCtx.cubicTo(230, -50, 450, 50, 500, 0);
+        // bvgCtx.closePath();
+        bvgCtx.lineDash = bvg::LineDash(8, 4);
+        bvgCtx.fontSize = 32;
+
+        float t = (sin(getTime()) + 1.0f) / 2.0f;
+        bvgCtx.fillStyle = bvg::SolidColor(bvg::Color::lerp(red, blue, t));
+
+        bvgCtx.textFillOnPath(L"Lorem ipsum dolor sit amet",
+                              sin(getTime()) * 80.0f + 80.0f, -4.0f);
+        bvgCtx.lineWidth = 2.0f;
+        bvgCtx.strokeStyle = bvg::SolidColor(bvg::colors::White);
+        bvgCtx.stroke();
+
+        bvgCtx.clearTransform();
+        bvgCtx.translate(600, 450);
+        bvgCtx.beginPath();
+        bvgCtx.lineTo(70, 100);
+        bvgCtx.lineTo(-70, 100);
+        bvgCtx.closePath();
+        bvgCtx.lineDash = bvg::LineDash();
+        bvgCtx.fillStyle = bvg::ConicGradient(0, 60, getTime() * 3.0f,
+                                              red,
+                                              blue);
+        bvgCtx.convexFill();
+        bvgCtx.lineWidth = 18;
+        bvgCtx.strokeStyle = bvg::RadialGradient(0, 60, 140,
+                                                 red,
+                                                 blue);
+
+        float time = getTime();
+        float timeCycle = 3;
+        float timeWithinCycle = time - floorf(time / timeCycle) * timeCycle;
+
+        if(timeWithinCycle < 1.0f)
+            bvgCtx.lineJoin = bvg::LineJoin::Miter;
+        else if(timeWithinCycle < 2.0f)
+            bvgCtx.lineJoin = bvg::LineJoin::Round;
+        else
+            bvgCtx.lineJoin = bvg::LineJoin::Bevel;
+
+    //    bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(0.0f, 0.0f, 0.0f, 0.5f));
+        bvgCtx.stroke();
+
+        bvgCtx.clearTransform();
+        float fastTime = getTime() * 3.0f;
+        bvgCtx.rotate(fastTime);
+        bvgCtx.translate(400, 500);
+        bvgCtx.beginPath();
+        bvgCtx.arc(0.0f, 0.0f, 25.0f, -0.7f, M_PI * 1.5f);
+        bvgCtx.lineDash = bvg::LineDash();
+        bvgCtx.lineWidth = 8;
+        bvgCtx.lineCap = bvg::LineCap::Round;
+        bvg::Color blueTransparent = bvg::Color(0.2f, 0.2f, 1.0f, 0.0f);
+        bvgCtx.strokeStyle = bvg::ConicGradient(0, 0, M_PI_2 + 0.3f,
+                                                red,
+                                                blueTransparent);
+        bvgCtx.stroke();
+
+        bvgCtx.clearTransform();
+        bvgCtx.translate(250, 500);
+        bvgCtx.beginPath();
+        bvgCtx.arc(0.0f, 0.0f, 50.0f, -2.0f, 3.0f);
+        bvgCtx.lineTo(0, 0);
+        bvgCtx.closePath();
+        bvgCtx.fillStyle = bvg::SolidColor(bvg::Color(1.0f, 0.7f, 0.1f));
+        bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(1.0f, 0.2f, 0.1f));
+        bvgCtx.lineWidth = 4;
+        bvgCtx.fill();
+        bvgCtx.stroke();
+
+        bvgCtx.clearTransform();
+        bvgCtx.translate(30, 400);
+        bvgCtx.beginPath();
+        bvgCtx.rect(0, 0, 100, 60, 12);
+        bvgCtx.fillStyle = bvg::SolidColor(bvg::Color(0.1f, 0.8f, 0.1f));
+        bvgCtx.strokeStyle = bvg::SolidColor(bvg::Color(0.0f, 0.5f, 0.0f));
+        // bvgCtx.lineDash = bvg::LineDash(8, 4);
+        bvgCtx.convexFill();
+        bvgCtx.stroke();
+    }
     
     bvgCtx.clearTransform();
     bvgCtx.translate(12, 12);
