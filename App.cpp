@@ -30,7 +30,8 @@ extern "C" {
 
 App::App():
 	mQuadPhysicalProps(1.0f, 95.0f, 5.0f),
-	mQuadPosX(-100.0f, 100.0f, mQuadPhysicalProps)
+	mQuadPosX(-100.0f, 100.0f, mQuadPhysicalProps),
+    ctx(bvgCtx)
 {
 }
 
@@ -77,20 +78,31 @@ int App::run()
 				quit = true;
 				break;
             case SDL_KEYDOWN:
-                if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
-                    mIsControlPressed = true;
-                if(currentEvent.key.keysym.scancode == SDL_SCANCODE_T)
-                    mGizmoTool = gizmo::GizmoTool::Translate;
-                if(currentEvent.key.keysym.scancode == SDL_SCANCODE_R)
-                    mGizmoTool = gizmo::GizmoTool::Rotate;
-                if(currentEvent.key.keysym.scancode == SDL_SCANCODE_S)
-                    mGizmoTool = gizmo::GizmoTool::Scale;
-                if(currentEvent.key.keysym.scancode == SDL_SCANCODE_N)
-                    mGizmoProps.enabledRotationSnap = !mGizmoProps.enabledRotationSnap;
-                if(currentEvent.key.keysym.scancode == SDL_SCANCODE_SPACE)
-                    mPlayRotation = !mPlayRotation;
-                if(currentEvent.key.keysym.scancode == SDL_SCANCODE_G)
-                    mDisplay3D = !mDisplay3D;
+                if(mDemoType != DemoType::HALF_EDGE) {
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
+                        mIsControlPressed = true;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_T)
+                        mGizmoTool = gizmo::GizmoTool::Translate;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_R)
+                        mGizmoTool = gizmo::GizmoTool::Rotate;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_S)
+                        mGizmoTool = gizmo::GizmoTool::Scale;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_N)
+                        mGizmoProps.enabledRotationSnap = !mGizmoProps.enabledRotationSnap;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_SPACE)
+                        mPlayRotation = !mPlayRotation;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_G)
+                        mDemoType = DemoType::GIZMOS;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_V)
+                        mDemoType = DemoType::VECTOR_GRAPHICS;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_U)
+                        mDemoType = DemoType::UI;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_H)
+                        mDemoType = DemoType::HALF_EDGE;
+                } else { // if half edge
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+                        mDemoType = DemoType::VECTOR_GRAPHICS;
+                }
                 break;
             case SDL_KEYUP:
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
@@ -325,12 +337,31 @@ void App::draw()
     Diligent::SwapChainDesc SCDesc = mSwapChain->GetDesc();
     
     bvgCtx.setupPipelineStates(SCDesc.ColorBufferFormat, SCDesc.DepthBufferFormat, 2);
+    bvgCtx.specifyTextureViews(renderTarget.RTV, renderTarget.DSV);
     
     bvgCtx.beginDrawing();
     
     bvgCtx.font = bvgCtx.fonts["roboto-regular"];
     
-    if(mDisplay3D) {
+    switch(mDemoType) {
+    case DemoType::HALF_EDGE:
+    {
+        bvg::Color primaryColor = bvg::Color(1.0f, 0.5f, 0.0f);
+        bvg::Color primaryColorSemiTr = primaryColor;
+        primaryColorSemiTr.a = 0.75f;
+        bvg::Color primaryColorTr = primaryColor;
+        primaryColorSemiTr.a = 0.5f;
+        
+        bvgCtx.clearTransform();
+        bvgCtx.fontSize = 40.0f;
+        bvgCtx.fillStyle = bvg::LinearGradient(0, 0, 0, bvgCtx.font->lineHeight,
+                                               primaryColorTr,
+                                               primaryColorSemiTr);
+        bvgCtx.print(L"Half Edge Data Structure", 10, 40);
+    }
+        break;
+    case DemoType::GIZMOS:
+    {
         float eyeX = sin(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * mZoom;
         float eyeY = sin(glm::radians(mPitch)) * mZoom;
         float eyeZ = cos(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * mZoom;
@@ -354,7 +385,18 @@ void App::draw()
                           mTransform, vp, eye, glm::vec3(0.0f), up,
                           blockMouseEvent ? false : isMouseDown, mMouseX, mMouseY);
     }
-    else {
+        break;
+    case DemoType::VECTOR_GRAPHICS:
+    {
+        bvgCtx.test();
+        
+        bvgCtx.beginClip();
+        bvgCtx.translate(200, 100);
+        bvgCtx.beginPath();
+        bvgCtx.arc(0.0f, 0.0f, 60, 0.0f, M_PI * 2.0f);
+        bvgCtx.fill();
+        bvgCtx.endClip();
+        
         bvgCtx.beginPath();
     //    bvgCtx.moveTo(-50, 50);
     //    bvgCtx.cubicTo(-50, 0, 50, 0, 50, 50);
@@ -378,10 +420,14 @@ void App::draw()
         bvgCtx.fillStyle = bvg::LinearGradient(-50, 20, 50, 100,
                                                bvg::colors::Black,
                                                bvg::colors::White);
+        bvgCtx.clearTransform();
         bvgCtx.rotate(mRotation);
         bvgCtx.translate(200, 100);
         bvgCtx.fill();
         bvgCtx.stroke();
+        bvgCtx.fillStyle = bvg::SolidColor(bvg::colors::White);
+        bvgCtx.print(L"Привет мир!", 0, 0);
+        bvgCtx.clearClip();
 
         bvgCtx.lineJoin = bvg::LineJoin::Miter;
 
@@ -398,8 +444,8 @@ void App::draw()
         bvgCtx.fillStyle = bvg::LinearGradient(0, 0, 0, bvgCtx.font->lineHeight,
                                                red,
                                                blue);
-        bvgCtx.textFill(L"Привет мир!", 0, 0);
-
+        bvgCtx.print(L"Привет мир!", 0, 0);
+        
         bvgCtx.clearTransform();
         bvgCtx.translate(200, 400);
         bvgCtx.beginPath();
@@ -408,12 +454,14 @@ void App::draw()
         bvgCtx.cubicTo(230, -50, 450, 50, 500, 0);
         // bvgCtx.closePath();
         bvgCtx.lineDash = bvg::LineDash(8, 4);
+        bvgCtx.lineDash.dash = { 8, 4, 4, 4 };
+        bvgCtx.lineDash.offset = sin(getTime()) * 80.0f;
         bvgCtx.fontSize = 32;
 
         float t = (sin(getTime()) + 1.0f) / 2.0f;
         bvgCtx.fillStyle = bvg::SolidColor(bvg::Color::lerp(red, blue, t));
 
-        bvgCtx.textFillOnPath(L"Lorem ipsum dolor sit amet",
+        bvgCtx.printOnPath(L"Lorem ipsum dolor sit amet",
                               sin(getTime()) * 80.0f + 80.0f, -4.0f);
         bvgCtx.lineWidth = 2.0f;
         bvgCtx.strokeStyle = bvg::SolidColor(bvg::colors::White);
@@ -485,13 +533,49 @@ void App::draw()
         // bvgCtx.lineDash = bvg::LineDash(8, 4);
         bvgCtx.convexFill();
         bvgCtx.stroke();
+        
+//        bvgCtx.clearTransform();
+//        bvgCtx.rotate(mRotation);
+//        bvgCtx.translate(0, 0);
+//        bvgCtx.beginPath();
+//        bvgCtx.rect(0, 0, 800, 600);
+//        bvgCtx.fillStyle = bvg::BoxShadow(100, 100, 200, 100, 16, 8, bvg::Color(1.0f, 0.1f, 0.1f));
+//        bvgCtx.convexFill();
+        
+        bvgCtx.clearTransform();
+        bvgCtx.rotate(mRotation);
+        bvgCtx.translate(25, 25);
+        bvgCtx.beginPath();
+        bvgCtx.rect(0, 0, 200, 100);
+        bvgCtx.fillStyle = bvg::BoxShadow(12, 12, 100, 50, 16, 8, bvg::Color(1.0f, 0.1f, 0.1f));
+        bvgCtx.convexFill();
+    }
+        break;
+    case DemoType::UI:
+    {
+        ctx.vg.fontSize = 16;
+        ctx.vg.fillStyle = bvg::SolidColor(bvg::colors::Black);
+        
+        beginPass(ctx, ContextPass::LAYOUT);
+        {
+            doUI();
+        }
+        endPass(ctx);
+        
+        beginPass(ctx, ContextPass::DRAW);
+        {
+            doUI();
+        }
+        endPass(ctx);
+    }
+        break;
     }
     
     bvgCtx.clearTransform();
     bvgCtx.translate(12, 12);
     bvgCtx.fontSize = 16;
     bvgCtx.fillStyle = bvg::SolidColor(bvg::colors::Black);
-    bvgCtx.textFill(FPS, 0, 0);
+    bvgCtx.print(FPS, 0, 0);
     
     bvgCtx.endDrawing();
      
@@ -533,8 +617,8 @@ void App::update()
 		mFPS = 0;
 	}
     
-    mLastRaycasts = ctx.NumRaycasts;
-    ctx.NumRaycasts = 0;
+//    mLastRaycasts = ctx.NumRaycasts;
+//    ctx.NumRaycasts = 0;
 
 	if (mQuadTime >= 2.0f) {
 		mQuadTime = 0.0f;
@@ -790,7 +874,7 @@ void App::initializeResources()
 	// mRenderTargets.current = std::make_shared<RenderTarget>(renderTargetCI);
 	// mRenderTargets.previous = std::make_shared<RenderTarget>(renderTargetCI);
 
-	mShapeRenderer = std::make_shared<ShapeRenderer>(ShapeRenderer(mDevice, mSwapChain));
+//	mShapeRenderer = std::make_shared<ShapeRenderer>(ShapeRenderer(mDevice, mSwapChain));
 
 	tube::Path path;
 	const static glm::vec2 size = glm::vec2(100.0f * 2.0f, 160.0f * 2.0f);
@@ -815,12 +899,6 @@ void App::initializeResources()
     mSquircleStroke = CreateStroke(mDevice, builder);
     
 	initializeFont();
-    
-    ctx.textRenderer = mTextRenderer;
-    ctx.shapeRenderer = mShapeRenderer;
-    ctx.context = mImmediateContext;
-    ctx.renderDevice = mDevice;
-    ctx.swapChain = mSwapChain;
     
     bvgCtx = bvg::DiligentContext(mWidth, mHeight, mDevice,
                                   mImmediateContext,
@@ -869,8 +947,8 @@ void App::initializeFont() {
 	stbi_image_free(data);
 
 	std::string fontFnt = LoadTextResource("Roboto-Regular.fnt");
-	mFont = ui::LoadFont(mDevice, fontFnt, atlases);
-	mTextRenderer = std::make_shared<TextRenderer>(TextRenderer(mDevice, mSwapChain, mFont));
+//	mFont = ui::LoadFont(mDevice, fontFnt, atlases);
+//	mTextRenderer = std::make_shared<TextRenderer>(TextRenderer(mDevice, mSwapChain, mFont));
 }
 
 float App::getTime()
@@ -878,29 +956,14 @@ float App::getTime()
 	return (float)SDL_GetTicks() / 1000.0f;
 }
 
-void App::doUI() {
-    beginAffine(ctx, glm::translate(mViewProjection, glm::vec3(100.0f, 100.0f, 0.0f)));
-    {
-        if(ctx.currentPass == ContextPass::DRAW) {
-            mShapeRenderer->draw(
-                mImmediateContext,
-                ctx.affineList.back().world *
-                glm::translate(glm::mat4(1.0f), glm::vec3(mSquircleShape->offset, 0.0f)),
-                *mSquircleShape.get(),
-                glm::vec3(1.0f),
-                0.5f);
-        }
-        
-        beginBoundary(ctx, mSquircleShape);
-        {
-            elements::Text(ctx, L"Идейные соображения высшего порядка, а также рамки и место обучения кадров способствует подготовки и реализации дальнейших направлений развития", ctx.textRenderer,
-                           24.0f, Color(0.0f, 0.0f, 0.0f, 1.0f));
-        }
-        endBoundary(ctx);
-    }
-    endAffine(ctx);
-}
-
 App::~App()
 {
+}
+
+void App::doUI() {
+    beginAffine(ctx, glm::translate(glm::mat3(1.0f), glm::vec2(80)));
+    {
+        elements::Label(ctx, L"Hello world!");
+    }
+    endAffine(ctx);
 }

@@ -29,6 +29,13 @@ struct MotionBlurConstants {
     glm::vec2 resolution;
 };
 
+enum class DemoType {
+    VECTOR_GRAPHICS,
+    GIZMOS,
+    UI,
+    HALF_EDGE
+};
+
 class App {
 public:
     int run();
@@ -87,9 +94,9 @@ private:
 
     ui::SpringPhysicalProperties mQuadPhysicalProps;
     ui::Spring mQuadPosX;
-    std::shared_ptr<ui::Font> mFont;
-    std::shared_ptr<TextRenderer> mTextRenderer;
-    std::shared_ptr<ShapeRenderer> mShapeRenderer;
+//    std::shared_ptr<ui::Font> mFont;
+//    std::shared_ptr<TextRenderer> mTextRenderer;
+//    std::shared_ptr<ShapeRenderer> mShapeRenderer;
 
     float mQuadTime = 0.0f;
     float mSecondTime = 0.0f;
@@ -117,7 +124,8 @@ private:
     gizmo::GizmoTool mGizmoTool = gizmo::GizmoTool::Translate;
     gizmo::GizmoProperties mGizmoProps;
     bool mPlayRotation = false;
-    bool mDisplay3D = false;
+    
+    DemoType mDemoType = DemoType::VECTOR_GRAPHICS;
     
 public:
     glm::vec2 mSquirclePos;

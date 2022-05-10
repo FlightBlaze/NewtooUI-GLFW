@@ -1,17 +1,21 @@
 #pragma once
 
-#include <TextRenderer.h>
-#include <Shape.h>
+#include <blazevg.hh>
+#include <vector>
 #include <memory>
 #include <list>
 
-class Context;
+class Affine {
+public:
+    glm::mat3 local;
+    glm::mat3 world;
+};
 
-void beginBoundary(Context& ctx, std::shared_ptr<Shape> shape);
-void endBoundary(Context& ctx);
-
-void beginAffine(Context& ctx, glm::mat4 matrix);
-void endAffine(Context& ctx);
+class Boundary {
+public:
+    float width, height = 0;
+    bool clip = false;
+};
 
 enum class ContextPass {
     UNSPECIFIED,
@@ -19,60 +23,61 @@ enum class ContextPass {
     DRAW
 };
 
-struct ClippingMask {
-    std::shared_ptr<Shape> shape;
-    glm::mat4 affine;
+enum class ElementComparison {
+    Equal,
+    Changed,
+    Different
 };
 
-struct LayoutLine {
-    float width = 0.0f;
-    float height = 0.0f;
-    glm::vec2 position = glm::vec2(0.0f);
+class Rect {
+    float x, y, width, height;
 };
 
-struct Boundary {
-    std::shared_ptr<Shape> shape;
-    std::shared_ptr<LayoutLine> currentLine;
-    glm::vec2 currentPosition;
+class Layout {
+    glm::vec2 cursor;
+    std::vector<Rect> lines;
 };
 
-struct Affine {
-    glm::mat4 local;
-    glm::mat4 world;
+class ElementState {
+public:
+    std::string type;
+    Boundary parentBounds;
+    std::shared_ptr<Layout> layout;
+    Rect rect;
+    
+    virtual void onCreate();
+    virtual void onDelete();
+    virtual void applyChanges(ElementState& other);
+    virtual ElementComparison compare(ElementState& other);
 };
 
-struct LayoutSpec {
-    float width, height;
-    glm::vec2 position = glm::vec2(0.0f);
-    std::shared_ptr<Shape> boundaryShape;
-    std::shared_ptr<LayoutLine> line;
-};
+void changesScript(std::list<ElementState>& before, std::list<ElementState>& after);
+
+// 1. Measure dimension constraints from parent to children
+// 2. Measure dimensions from child to parent
+// 3. Move elements to their position in the flow
+// 4. Align elements
 
 class Context {
 public:
-    Context();
+    Context(bvg::Context& vg);
     
-    ContextPass currentPass = ContextPass::UNSPECIFIED;
+    bvg::Context& vg;
     
-    std::shared_ptr<TextRenderer> textRenderer;
-    std::shared_ptr<ShapeRenderer> shapeRenderer;
-    
-    Diligent::RefCntAutoPtr<Diligent::IRenderDevice> renderDevice;
-    Diligent::RefCntAutoPtr<Diligent::IDeviceContext> context;
-    Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain;
-    
-    std::list<ClippingMask> clippingMaskList;
-    std::list<Boundary> boundariesList;
     std::list<Affine> affineList;
-    std::list<LayoutSpec> layoutSpecList;
+    std::list<Boundary> boundaryList;
     
-    void pushLayoutSpec(LayoutSpec ls);
-    LayoutSpec popLayoutSpec();
+    std::list<ElementState> savedElements;
+    std::list<ElementState> currentElements;
     
-    int NumRaycasts = 0;
-    
-private:
-    void newLineIfNeeded(Boundary& b, glm::vec2 position, glm::vec2 padding);
-    void newLine(Boundary& b, glm::vec2 position, glm::vec2 padding);
-    void doLayout(LayoutSpec& ls, Boundary& b);
+    ContextPass currentPass;
 };
+
+void beginPass(Context& ctx, ContextPass pass);
+void endPass(Context& ctx);
+
+void beginAffine(Context& ctx, glm::mat3 matrix);
+void endAffine(Context& ctx);
+
+void beginBoundary(Context& ctx, float left, float top, float right, float bottom);
+void endBoundary(Context& ctx);
