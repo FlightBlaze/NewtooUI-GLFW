@@ -78,6 +78,7 @@ bool HalfEdge::isSelectionBoundary() {
 }
 
 void SelBoundIter::next() {
+    this->wasNext = true;
     for (auto it = VertexEdgeIter(cur->prev->vert); !it.isEnd(); it++) {
         if(it->isSelectionBoundary()) {
             cur = it.current();
@@ -220,10 +221,13 @@ void Mesh::deleteVertex(Vertex* vert) {
     HalfEdge* aroundVertexCur = aroundVertexStart;
     for (auto aroundVertex = VertexEdgeIter(vert);
          !aroundVertex.isEnd(); aroundVertex++) {
-        for (auto aroundFace = FaceEdgeIter(aroundVertex->face);
+        Face* face = aroundVertex->face;
+        for (auto aroundFace = FaceEdgeIter(face);
              !aroundFace.isEnd(); aroundFace++) {
+            aroundFace->face = nullptr;
             halfEdgesToDelete.push_back(aroundFace.current());
         }
+        delete face;
     }
     for(auto edge : halfEdgesToDelete) {
         Vertex* origin = edge->prev->vert;
@@ -237,6 +241,7 @@ void Mesh::deleteVertex(Vertex* vert) {
         }
         delete edge;
     }
+    delete vert;
 }
 
 void VertexEdgeIter::next() {
@@ -292,5 +297,51 @@ Vertex* Mesh::addVertex(glm::vec2 pos) {
 }
 
 Face* Mesh::addFace(std::vector<Vertex*> vertices) {
-    // TODO: addFace
+    /*
+     
+    *       *       *       *
+     |-----| |-----| |-----|
+     |     | |     | |     |
+     |-----| |-----| |-----|
+    *       &   >   *       *
+     ^----->         |-----|
+     |     |^       v|     |
+     <-----v         |-----|
+    *       *   <   *       *
+     |-----| |-----| |-----|
+     |     | |     | |     |
+     |-----  |-----| |-----|
+    *       *       *       *
+     
+     */
+
+    Face* face = new Face();
+    std::vector<HalfEdge*> halfEdges;
+    for(int i = 0; i < vertices.size(); i++) {
+        HalfEdge* he = new HalfEdge();
+        int nextVertInd = i < vertices.size() - 1? i + 1 : 0;
+        he->vert = vertices[nextVertInd];
+        he->face = face;
+        halfEdges.push_back(he);
+    }
+    for(int i = 0; i < halfEdges.size(); i++) {
+        HalfEdge* current = halfEdges[i];
+        Vertex* vert = current->vert;
+        for (auto aroundVert = VertexEdgeIter(vert);
+             !aroundVert.isEnd(); aroundVert++) {
+            if(aroundVert->prev->vert == vert) {
+                aroundVert->twin = current;
+            }
+        }
+        
+        int nextInd = i < halfEdges.size() - 1? i + 1 : 0;
+        int prevInd = i > 0? i - 1 : halfEdges.size() - 1;
+        current->next = halfEdges[nextInd];
+        current->prev = halfEdges[prevInd];
+    }
+    for(int i = 0; i < halfEdges.size(); i++) {
+        if(vertices[i]->edge == nullptr) {
+            vertices[i]->edge = halfEdges[i];
+        }
+    }
 }
