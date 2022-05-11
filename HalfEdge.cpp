@@ -221,11 +221,13 @@ void Mesh::deleteVertex(Vertex* vert) {
     HalfEdge* aroundVertexCur = aroundVertexStart;
     for (auto aroundVertex = VertexEdgeIter(vert);
          !aroundVertex.isEnd(); aroundVertex++) {
+        halfEdgesToDelete.push_back(aroundVertex.current());
+        halfEdgesToDelete.push_back(aroundVertex->twin);
         Face* face = aroundVertex->face;
         for (auto aroundFace = FaceEdgeIter(face);
              !aroundFace.isEnd(); aroundFace++) {
             aroundFace->face = nullptr;
-            halfEdgesToDelete.push_back(aroundFace.current());
+//            halfEdgesToDelete.push_back(aroundFace.current());
         }
         delete face;
     }
@@ -236,9 +238,9 @@ void Mesh::deleteVertex(Vertex* vert) {
         }
     }
     for(auto edge : halfEdgesToDelete) {
-        if(edge->twin != nullptr) {
-            edge->twin->twin = nullptr;
-        }
+//        if(edge->twin != nullptr) {
+//            edge->twin->twin = nullptr;
+//        }
         delete edge;
     }
     delete vert;
@@ -330,7 +332,12 @@ Face* Mesh::addFace(std::vector<Vertex*> vertices) {
         for (auto aroundVert = VertexEdgeIter(vert);
              !aroundVert.isEnd(); aroundVert++) {
             if(aroundVert->prev->vert == vert) {
+                if(aroundVert->twin == nullptr) {
+                    delete aroundVert->twin;
+                }
                 aroundVert->twin = current;
+                current->twin = aroundVert.current();
+                break;
             }
         }
         
@@ -338,6 +345,22 @@ Face* Mesh::addFace(std::vector<Vertex*> vertices) {
         int prevInd = i > 0? i - 1 : halfEdges.size() - 1;
         current->next = halfEdges[nextInd];
         current->prev = halfEdges[prevInd];
+        
+        if(current->twin == nullptr) {
+            HalfEdge* twin = new HalfEdge();
+            twin->twin = current;
+            twin->vert = current->prev->vert;
+            twin->next = nullptr;
+            twin->prev = nullptr;
+        }
+    }
+    for(int i = 0; i < halfEdges.size(); i++) {
+        HalfEdge* current = halfEdges[i];
+        HalfEdge* twin = current->twin;
+        if(twin->prev == nullptr || twin->next == nullptr) {
+            twin->prev = current->next->twin;
+            twin->next = current->prev->twin;
+        }
     }
     for(int i = 0; i < halfEdges.size(); i++) {
         if(vertices[i]->edge == nullptr) {
