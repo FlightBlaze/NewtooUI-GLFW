@@ -41,18 +41,19 @@ struct Mesh {
     Vertex* addVertex(glm::vec2 pos);
     Face* addFace(std::vector<Vertex*> vertices);
     void deleteVertex(Vertex* vert);
+    void deselectOne(Vertex* vert);
     void deselectAll();
     void selectOne(Vertex* vert);
     void select(std::vector<Vertex*> vertices);
     std::list<Vertex*> duplicate();
     HalfEdge* findSelectionBoundary();
     void extrude();
-    // TODO: Extrude
 };
 
 class EdgeLoopIter {
     HalfEdge* start;
     HalfEdge* cur;
+    bool wasNext = false;
     
     void next();
     
@@ -67,11 +68,44 @@ public:
 class SelBoundIter {
     HalfEdge* start;
     HalfEdge* cur;
+    bool wasNext = false;
     
     void next();
     
 public:
     SelBoundIter(HalfEdge* edge);
+    
+    void operator++(int n);
+    HalfEdge* operator->();
+    HalfEdge* current();
+    bool isEnd();
+};
+
+class VertexEdgeIter {
+    HalfEdge* start;
+    HalfEdge* cur;
+    bool wasNext = false;
+    
+    void next();
+    
+public:
+    VertexEdgeIter(Vertex* vert);
+    
+    void operator++(int n);
+    HalfEdge* operator->();
+    HalfEdge* current();
+    bool isEnd();
+};
+
+class FaceEdgeIter {
+    HalfEdge* start;
+    HalfEdge* cur;
+    bool wasNext = false;
+    
+    void next();
+    
+public:
+    FaceEdgeIter(Face* face);
     
     void operator++(int n);
     HalfEdge* operator->();
