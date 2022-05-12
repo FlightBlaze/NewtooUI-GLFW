@@ -7,6 +7,7 @@
 #include <Shape.h>
 #include <Elements.h>
 #include <Context.h>
+#include <HalfEdge.h>
 // #include <GLFW/glfw3.h>
 #include <SDL.h>
 #include <glm/glm.hpp>
@@ -140,6 +141,9 @@ public:
     Context ctx;
     
     bvg::DiligentContext bvgCtx;
+    
+    HE::Mesh mesh;
+    HE::MeshViewer meshViewer;
     
     void doUI();
 };

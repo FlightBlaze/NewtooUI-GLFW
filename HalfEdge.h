@@ -9,8 +9,11 @@
 #include <vector>
 #include <list>
 #include <unordered_map>
+#include <blazevg.hh>
 
 #pragma once
+
+namespace HE {
 
 struct Vertex;
 struct HalfEdge;
@@ -21,6 +24,8 @@ struct HalfEdge {
     Vertex *vert;
     Face *face;
     
+    HalfEdge();
+    
     bool isSelectionBoundary();
 };
 
@@ -28,24 +33,33 @@ struct Vertex {
     HalfEdge *edge;
     glm::vec2 pos;
     bool isSelected;
+    
+    Vertex();
 };
 
 struct Face {
     HalfEdge *edge;
+    
+    Face();
 };
 
 struct Mesh {
+    std::list<Vertex*> vertices;
+    std::list<Face*> faces;
     std::list<Vertex*> selectedVertices;
+    
     std::list<Face*> selectedFaces();
     
     Vertex* addVertex(glm::vec2 pos);
     Face* addFace(std::vector<Vertex*> vertices);
+    void deleteFace(Face* face);
     void deleteVertex(Vertex* vert);
     void deselectOne(Vertex* vert);
     void deselectAll();
     void selectOne(Vertex* vert);
     void select(std::vector<Vertex*> vertices);
     std::list<Vertex*> duplicate();
+    std::list<Vertex*> open(std::vector<Vertex*> vertices);
     HalfEdge* findSelectionBoundary();
     void extrude();
 };
@@ -112,6 +126,17 @@ public:
     HalfEdge* current();
     bool isEnd();
 };
+
+class MeshViewer {
+public:
+    Mesh *mesh;
+    
+    MeshViewer(Mesh *mesh);
+    
+    void draw(bvg::Context& ctx);
+};
+
+} // namespace
 
 //struct Edge;
 //struct Face;

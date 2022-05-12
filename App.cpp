@@ -31,8 +31,14 @@ extern "C" {
 App::App():
 	mQuadPhysicalProps(1.0f, 95.0f, 5.0f),
 	mQuadPosX(-100.0f, 100.0f, mQuadPhysicalProps),
-    ctx(bvgCtx)
+    ctx(bvgCtx),
+    mesh(),
+    meshViewer(&this->mesh)
 {
+    HE::Vertex* a = mesh.addVertex(glm::vec2(200.0f, 200.0f));
+    HE::Vertex* b = mesh.addVertex(glm::vec2(250.0f, 140.0f));
+    HE::Vertex* c = mesh.addVertex(glm::vec2(300.0f, 200.0f));
+    mesh.addFace({a, b, c});
 }
 
 int App::run()
@@ -358,6 +364,8 @@ void App::draw()
                                                primaryColorTr,
                                                primaryColorSemiTr);
         bvgCtx.print(L"Half Edge Data Structure", 10, 40);
+        
+        meshViewer.draw(bvgCtx);
     }
         break;
     case DemoType::GIZMOS:
