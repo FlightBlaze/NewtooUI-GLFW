@@ -7,6 +7,8 @@
 
 #include "HalfEdge.h"
 
+#include <iostream>
+
 using namespace HE;
 
 HalfEdge::HalfEdge():
@@ -281,6 +283,7 @@ void Mesh::deleteVertex(Vertex* vert) {
 //        }
         delete edge;
     }
+    this->vertices.remove(vert);
     delete vert;
 }
 
@@ -289,6 +292,12 @@ void Mesh::deleteFace(Face* face) {
 }
 
 void VertexEdgeIter::next() {
+    if(this->cur->twin == nullptr) {
+        this->cur = nullptr;
+        this->wasNext = true;
+        return;
+    }
+    
     this->cur = this->cur->twin->next;
     this->wasNext = true;
 }
@@ -309,7 +318,7 @@ HalfEdge* VertexEdgeIter::current() {
 }
 
 bool VertexEdgeIter::isEnd() {
-    return cur == this->start && this->wasNext;
+    return (cur == this->start && this->wasNext) || cur == nullptr;
 }
 
 void FaceEdgeIter::next() {
@@ -372,22 +381,53 @@ Face* Mesh::addFace(std::vector<Vertex*> vertices) {
         he->face = face;
         halfEdges.push_back(he);
     }
+    // ------------------------------------------------------------
+    std::list<std::pair<HalfEdge*, HalfEdge*>> twins;
     for(int i = 0; i < halfEdges.size(); i++) {
         HalfEdge* current = halfEdges[i];
-        Vertex* vert = current->vert;
-        if(vert->edge != nullptr) {
-            for (auto aroundVert = VertexEdgeIter(vert);
+        Vertex* origin = vertices[i];
+        Vertex* destination = current->vert;
+        if(destination->edge != nullptr) {
+            /*
+                |     ^ |     ^
+                |     | |     |
+                v--T--> v----->
+               &       *       *
+                <--C--^ <-----^
+                |     | |     |
+                v     | v     |
+             */
+            for (auto aroundVert = VertexEdgeIter(destination);
                  !aroundVert.isEnd(); aroundVert++) {
-                if(aroundVert->prev->vert == vert) {
-                    if(aroundVert->twin == nullptr) {
-                        delete aroundVert->twin;
-                    }
-                    aroundVert->twin = current;
-                    current->twin = aroundVert.current();
+                
+                if(aroundVert->vert == origin) {
+//                    twins.push_back(std::make_pair(aroundVert.current(), current));
+                    delete halfEdges[i];
+                    halfEdges[i] = aroundVert->twin;
+                    halfEdges[i]->face = face;
+                    halfEdges[i]->next = nullptr;
+                    halfEdges[i]->prev = nullptr;
                     break;
                 }
             }
         }
+    }
+        
+    for(auto pair : twins) {
+//        HalfEdge* twin = pair.first;
+//        HalfEdge* current = pair.second;
+//
+//        if(twin->twin != nullptr) {
+//            delete twin->twin;
+//        }
+//        twin->twin = current;
+//        current->twin = twin;
+    }
+    
+    for(int i = 0; i < halfEdges.size(); i++) {
+        HalfEdge* current = halfEdges[i];
+        Vertex* origin = vertices[i];
+        Vertex* destination = current->vert;
         
         int nextInd = i < halfEdges.size() - 1? i + 1 : 0;
         int prevInd = i > 0? i - 1 : halfEdges.size() - 1;
@@ -398,16 +438,25 @@ Face* Mesh::addFace(std::vector<Vertex*> vertices) {
             HalfEdge* twin = new HalfEdge();
             current->twin = twin;
             twin->twin = current;
-            twin->vert = current->prev->vert;
+            twin->vert = origin;
             twin->next = nullptr;
             twin->prev = nullptr;
             twin->face = nullptr;
         }
     }
+    // ------------------------------------------------------------
     for(int i = 0; i < halfEdges.size(); i++) {
         HalfEdge* current = halfEdges[i];
         HalfEdge* twin = current->twin;
         if(twin->prev == nullptr || twin->next == nullptr) {
+            /*
+                  <------
+                *
+                  ------>
+               | ^
+               | |
+               v |
+             */
             twin->prev = current->next->twin;
             twin->next = current->prev->twin;
         }
@@ -418,8 +467,139 @@ Face* Mesh::addFace(std::vector<Vertex*> vertices) {
         }
     }
     face->edge = halfEdges[0];
+    if(this->faces.size() == 0) {
+        face->edge->isDebugSelected = true;
+    }
     this->faces.push_back(face);
     return face;
+}
+
+Face* Mesh::addFace2(std::vector<Vertex*> vertices) {
+    /*
+     
+    *       *       *       *
+     |-----| |-----| |-----|
+     |     | |     | |     |
+     |-----| |-----| |-----|
+    *       &   >   *       *
+     ^----->         |-----|
+     |     |^       v|     |
+     <-----v         |-----|
+    *       *   <   *       *
+     |-----| |-----| |-----|
+     |     | |     | |     |
+     |-----  |-----| |-----|
+    *       *       *       *
+     
+     */
+
+    Face* face = new Face();
+    std::vector<HalfEdge*> halfEdges;
+    for(int i = 0; i < vertices.size(); i++) {
+        HalfEdge* he = new HalfEdge();
+        int nextVertInd = i < vertices.size() - 1? i + 1 : 0;
+        he->vert = vertices[nextVertInd];
+        he->face = face;
+        halfEdges.push_back(he);
+    }
+    
+    for(int i = 0; i < halfEdges.size(); i++) {
+        HalfEdge* current = halfEdges[i];
+        Vertex* origin = vertices[i];
+        Vertex* destination = current->vert;
+
+        int nextInd = i < halfEdges.size() - 1? i + 1 : 0;
+        int prevInd = i > 0? i - 1 : halfEdges.size() - 1;
+        current->next = halfEdges[nextInd];
+        current->prev = halfEdges[prevInd];
+    }
+    
+    // ------------------------------------------------------------
+    std::list<std::pair<HalfEdge*, int>> twins;
+    for(int i = 0; i < halfEdges.size(); i++) {
+        HalfEdge* current = halfEdges[i];
+        Vertex* origin = vertices[i];
+        Vertex* destination = current->vert;
+        if(destination->edge != nullptr) {
+            /*
+                |     ^ |     ^
+                |     | |     |
+                v--T--> v----->
+               &       *       *
+                <--C--^ <-----^
+                |     | |     |
+                v     | v     |
+             */
+            
+            for (auto aroundVert = VertexEdgeIter(destination);
+                 !aroundVert.isEnd(); aroundVert++) {
+                
+                // Here are an error
+                if(aroundVert->vert == origin) {
+                    twins.push_back(std::make_pair(aroundVert.current(), i));
+                    break;
+                }
+            }
+        }
+    }
+    
+//    std::cout << "Num twins: " << twins.size() << std::endl; // 1
+    
+    for(auto pair : twins) {
+        HalfEdge* twin = pair.first;
+//        HalfEdge* current = pair.second;
+        int i = pair.second;
+        
+        if(twin->twin != nullptr) {
+            delete halfEdges[i];
+            halfEdges[i] = twin->twin;
+            halfEdges[i]->face = face;
+            halfEdges[i]->next = nullptr;
+            halfEdges[i]->prev = nullptr;
+            
+            twin->twin = halfEdges[i];
+            halfEdges[i]->twin = twin;
+        }
+//
+//        if(twin->twin != nullptr) {
+//            delete twin->twin;
+//        }
+    }
+    // ------------------------------------------------------------
+    for(int i = 0; i < halfEdges.size(); i++) {
+        HalfEdge* current = halfEdges[i];
+        Vertex* origin = vertices[i];
+        if(current->twin == nullptr) {
+            HalfEdge* twin = new HalfEdge();
+            current->twin = twin;
+            twin->twin = current;
+            twin->vert = origin;
+            twin->face = nullptr;
+            twin->prev = current->next->twin;
+            twin->next = current->prev->twin;
+        }
+    }
+    for(int i = 0; i < halfEdges.size(); i++) {
+        if(vertices[i]->edge == nullptr) {
+            vertices[i]->edge = halfEdges[i];
+        }
+    }
+    face->edge = halfEdges[0];
+    if(this->faces.size() == 0) {
+        face->edge->isDebugSelected = true;
+    }
+    this->faces.push_back(face);
+    return face;
+}
+
+HalfEdge* Mesh::findDebugSelectedHalfEdge() {
+    for(auto vert : this->vertices) {
+        for(auto edgeIt = VertexEdgeIter(vert); !edgeIt.isEnd(); edgeIt++) {
+            if(edgeIt->isDebugSelected)
+                return edgeIt.current();
+        }
+    }
+    return nullptr;
 }
 
 MeshViewer::MeshViewer(Mesh *mesh):
@@ -431,6 +611,7 @@ void MeshViewer::draw(bvg::Context& ctx) {
     
     bvg::Style halfEdgeStyle = bvg::SolidColor(bvg::colors::Black);
     bvg::Style boundaryHalfEdgeStyle = bvg::SolidColor(bvg::Color(1.0f, 0.0f, 0.0f));
+    bvg::Style debugHalfEdgeStyle = bvg::SolidColor(bvg::Color(0.0f, 1.0f, 0.0f));
     
     
     ctx.fillStyle = bvg::SolidColor(bvg::colors::Black);
@@ -441,6 +622,9 @@ void MeshViewer::draw(bvg::Context& ctx) {
         ctx.arc(vert->pos.x, vert->pos.y, 8.0f, 0.0f, M_PI * 2.0f);
         ctx.convexFill();
         
+        if(vert->edge == nullptr)
+            continue;
+        int i = 0;
         for(auto edgeIt = VertexEdgeIter(vert); !edgeIt.isEnd(); edgeIt++) {
             glm::vec2 start = vert->pos;
             glm::vec2 end = edgeIt->vert->pos;
@@ -460,7 +644,14 @@ void MeshViewer::draw(bvg::Context& ctx) {
             } else {
                 ctx.strokeStyle = boundaryHalfEdgeStyle;
             }
+            if(edgeIt->isDebugSelected) {
+                ctx.strokeStyle = debugHalfEdgeStyle;
+            }
             ctx.stroke();
+            
+            i++;
+            if(i == 10)
+                break;
         }
     }
 }

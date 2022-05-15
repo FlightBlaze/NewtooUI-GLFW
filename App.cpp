@@ -35,10 +35,53 @@ App::App():
     mesh(),
     meshViewer(&this->mesh)
 {
-    HE::Vertex* a = mesh.addVertex(glm::vec2(200.0f, 200.0f));
-    HE::Vertex* b = mesh.addVertex(glm::vec2(250.0f, 140.0f));
-    HE::Vertex* c = mesh.addVertex(glm::vec2(300.0f, 200.0f));
-    mesh.addFace({a, b, c});
+    /*
+        1     2
+     
+        0     3
+     
+        5     4
+     
+        6     7
+     */
+    
+    PolyMesh::VertexHandle vhandle[8];
+     
+    vhandle[0] = mesh.add_vertex(PolyMesh::Point(210.0f, 200.0f, 0));
+    vhandle[1] = mesh.add_vertex(PolyMesh::Point(200.0f, 100.0f, 0));
+    vhandle[2] = mesh.add_vertex(PolyMesh::Point(300.0f, 100.0f, 0));
+    vhandle[3] = mesh.add_vertex(PolyMesh::Point(300.0f, 210.0f, 0));
+    vhandle[4] = mesh.add_vertex(PolyMesh::Point(300.0f, 260.0f, 0));
+    vhandle[5] = mesh.add_vertex(PolyMesh::Point(200.0f, 260.0f, 0));
+    vhandle[6] = mesh.add_vertex(PolyMesh::Point(300.0f, 320.0f, 0));
+    vhandle[7] = mesh.add_vertex(PolyMesh::Point(200.0f, 320.0f, 0));
+    
+    std::vector<PolyMesh::VertexHandle>  face_vhandles;
+     
+    face_vhandles.clear();
+    face_vhandles.push_back(vhandle[0]);
+    face_vhandles.push_back(vhandle[1]);
+    face_vhandles.push_back(vhandle[2]);
+    face_vhandles.push_back(vhandle[3]);
+    mesh.add_face(face_vhandles);
+
+    face_vhandles.clear();
+    face_vhandles.push_back(vhandle[0]);
+    face_vhandles.push_back(vhandle[3]);
+    face_vhandles.push_back(vhandle[4]);
+    face_vhandles.push_back(vhandle[5]);
+    mesh.add_face(face_vhandles);
+
+    face_vhandles.clear();
+    face_vhandles.push_back(vhandle[5]);
+    face_vhandles.push_back(vhandle[4]);
+    face_vhandles.push_back(vhandle[6]);
+    face_vhandles.push_back(vhandle[7]);
+    mesh.add_face(face_vhandles);
+    
+    mesh.request_face_status();
+    mesh.request_edge_status();
+    mesh.request_vertex_status();
 }
 
 int App::run()
@@ -108,11 +151,42 @@ int App::run()
                 } else { // if half edge
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
                         mDemoType = DemoType::VECTOR_GRAPHICS;
+                    
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LSHIFT)
+                        meshViewer.shiftPressed = true;
+                    
+//                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
+//                        HE::HalfEdge* he = mesh.findDebugSelectedHalfEdge();
+//                        if(he != nullptr) {
+//                            he->next->isDebugSelected = true;
+//                            he->isDebugSelected = false;
+//                        }
+//                    }
+//                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LEFT) {
+//                        HE::HalfEdge* he = mesh.findDebugSelectedHalfEdge();
+//                        if(he != nullptr) {
+//                            he->prev->isDebugSelected = true;
+//                            he->isDebugSelected = false;
+//                        }
+//                    }
+//                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_DOWN ||
+//                       currentEvent.key.keysym.scancode == SDL_SCANCODE_UP) {
+//                        HE::HalfEdge* he = mesh.findDebugSelectedHalfEdge();
+//                        if(he != nullptr) {
+//                            he->twin->isDebugSelected = true;
+//                            he->isDebugSelected = false;
+//                        }
+//                    }
                 }
                 break;
             case SDL_KEYUP:
                 if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
                     mIsControlPressed = false;
+            
+                if(mDemoType == DemoType::HALF_EDGE) {
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LSHIFT)
+                        meshViewer.shiftPressed = false;
+                }
                 break;
 			case SDL_WINDOWEVENT:
 				switch(currentEvent.window.event) {
@@ -365,7 +439,7 @@ void App::draw()
                                                primaryColorSemiTr);
         bvgCtx.print(L"Half Edge Data Structure", 10, 40);
         
-        meshViewer.draw(bvgCtx);
+        meshViewer.draw(bvgCtx, isMouseDown, mMouseX, mMouseY);
     }
         break;
     case DemoType::GIZMOS:

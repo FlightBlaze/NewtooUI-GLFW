@@ -28,3 +28,6 @@
 [submodule "submodules/blazegizmo"]
 	path = submodules/blazegizmo
 	url = https://github.com/FlightBlaze/blazegizmo.git
+[submodule "submodules/OpenMesh"]
+	path = submodules/OpenMesh
+	url = https://gitlab.vci.rwth-aachen.de:9000/OpenMesh/OpenMesh.git

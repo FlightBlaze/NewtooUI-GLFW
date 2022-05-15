@@ -26,6 +26,8 @@ struct HalfEdge {
     
     HalfEdge();
     
+    bool isDebugSelected = false;
+    
     bool isSelectionBoundary();
 };
 
@@ -52,6 +54,7 @@ struct Mesh {
     
     Vertex* addVertex(glm::vec2 pos);
     Face* addFace(std::vector<Vertex*> vertices);
+    Face* addFace2(std::vector<Vertex*> vertices);
     void deleteFace(Face* face);
     void deleteVertex(Vertex* vert);
     void deselectOne(Vertex* vert);
@@ -62,6 +65,7 @@ struct Mesh {
     std::list<Vertex*> open(std::vector<Vertex*> vertices);
     HalfEdge* findSelectionBoundary();
     void extrude();
+    HalfEdge* findDebugSelectedHalfEdge();
 };
 
 class EdgeLoopIter {
