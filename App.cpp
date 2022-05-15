@@ -81,6 +81,7 @@ App::App():
     
     mesh.request_face_status();
     mesh.request_edge_status();
+    mesh.request_halfedge_status();
     mesh.request_vertex_status();
 }
 
@@ -155,6 +156,15 @@ int App::run()
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LSHIFT)
                         meshViewer.shiftPressed = true;
                     
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_G)
+                        meshViewer.currentTransform = CurrentTransform::Move;
+                    
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_S)
+                        meshViewer.currentTransform = CurrentTransform::Scale;
+                    
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_E)
+                        extrude(mesh);
+                    
 //                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
 //                        HE::HalfEdge* he = mesh.findDebugSelectedHalfEdge();
 //                        if(he != nullptr) {
@@ -186,6 +196,12 @@ int App::run()
                 if(mDemoType == DemoType::HALF_EDGE) {
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LSHIFT)
                         meshViewer.shiftPressed = false;
+                    
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_G)
+                        meshViewer.currentTransform = CurrentTransform::None;
+                    
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_S)
+                        meshViewer.currentTransform = CurrentTransform::None;
                 }
                 break;
 			case SDL_WINDOWEVENT:
