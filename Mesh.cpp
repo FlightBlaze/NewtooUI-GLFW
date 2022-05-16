@@ -90,10 +90,14 @@ bool isHalfEdgeSelectionBoundary(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh,
     const bool isPointingVertSelected = mesh.status(pointingVert).selected();
     const bool isVertInBoundary = mesh.is_boundary(pointingVert);
     const bool isHalfedgeIsBoundary = mesh.face_handle(heh) == PolyMesh::InvalidFaceHandle;
-    const bool isHalfedgeIsBelondToSelectedFace =
+    const bool isHalfedgeIsBelongToSelectedFace =
         selectedFacesMap.find(mesh.face_handle(heh)) != selectedFacesMap.end();
+    const bool isSelectedAnyFace = selectedFacesMap.size() > 0;
     
-    if(!isHalfedgeIsBelondToSelectedFace)
+    if(!isSelectedAnyFace && isPointingVertSelected && isVertInBoundary && isHalfedgeIsBoundary)
+        return true;
+    
+    if(!isHalfedgeIsBelongToSelectedFace)
         return false;
     
     if(isPointingVertSelected && isVertInBoundary && !isHalfedgeIsBoundary)
