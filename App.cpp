@@ -45,7 +45,7 @@ App::App():
         6     7
      */
     
-    PolyMesh::VertexHandle vhandle[8];
+    PolyMesh::VertexHandle vhandle[10];
      
     vhandle[0] = mesh.add_vertex(PolyMesh::Point(210.0f, 200.0f, 0));
     vhandle[1] = mesh.add_vertex(PolyMesh::Point(200.0f, 100.0f, 0));
@@ -55,6 +55,8 @@ App::App():
     vhandle[5] = mesh.add_vertex(PolyMesh::Point(200.0f, 260.0f, 0));
     vhandle[6] = mesh.add_vertex(PolyMesh::Point(300.0f, 320.0f, 0));
     vhandle[7] = mesh.add_vertex(PolyMesh::Point(200.0f, 320.0f, 0));
+    vhandle[8] = mesh.add_vertex(PolyMesh::Point(200.0f, 410.0f, 0));
+    vhandle[9] = mesh.add_vertex(PolyMesh::Point(300.0f, 410.0f, 0));
     
     std::vector<PolyMesh::VertexHandle>  face_vhandles;
      
@@ -77,6 +79,13 @@ App::App():
     face_vhandles.push_back(vhandle[4]);
     face_vhandles.push_back(vhandle[6]);
     face_vhandles.push_back(vhandle[7]);
+    mesh.add_face(face_vhandles);
+    
+    face_vhandles.clear();
+    face_vhandles.push_back(vhandle[9]);
+    face_vhandles.push_back(vhandle[8]);
+    face_vhandles.push_back(vhandle[7]);
+    face_vhandles.push_back(vhandle[6]);
     mesh.add_face(face_vhandles);
     
     mesh.request_face_status();

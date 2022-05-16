@@ -10,19 +10,24 @@
 #include <OpenMesh/Core/Mesh/PolyMesh_ArrayKernelT.hh>
 #include <blazevg.hh>
 #include <list>
+#include <unordered_map>
 
 typedef OpenMesh::PolyMesh_ArrayKernelT<> PolyMesh;
 
 class SelectionBoundaryIter {
+    std::unordered_map<PolyMesh::FaceHandle, bool> selectedFacesMap;
+    std::unordered_map<PolyMesh::HalfedgeHandle, int> traversedHalfedges;
     PolyMesh::HalfedgeHandle start;
     PolyMesh::HalfedgeHandle cur;
     PolyMesh& mesh;
     bool wasNext = false;
+    int step = 0;
     
     void next();
     
 public:
-    SelectionBoundaryIter(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh);
+    SelectionBoundaryIter(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh,
+                          std::unordered_map<PolyMesh::FaceHandle, bool>& selectedFacesMap);
     void operator++(int n);
     PolyMesh::HalfedgeHandle operator->();
     PolyMesh::HalfedgeHandle current();

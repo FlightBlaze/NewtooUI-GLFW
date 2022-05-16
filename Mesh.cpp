@@ -32,6 +32,14 @@ std::list<PolyMesh::FaceHandle> getSelectedFaces(PolyMesh& mesh) {
     return faces;
 }
 
+std::unordered_map<PolyMesh::FaceHandle, bool> getSelectedFacesMap(std::list<PolyMesh::FaceHandle> list) {
+    std::unordered_map<PolyMesh::FaceHandle, bool> map;
+    for (auto fh : list) {
+        map[fh] = true;
+    }
+    return map;
+}
+
 struct Duplicate {
     std::list<PolyMesh::VertexHandle> newVerts;
     std::unordered_map<PolyMesh::VertexHandle, PolyMesh::VertexHandle> originalCopyPairs;
@@ -60,7 +68,8 @@ Duplicate duplicate(PolyMesh& mesh) {
     return dup;
 }
 
-bool isHalfEdgeSelectionBoundary(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh) {
+bool isHalfEdgeSelectionBoundary(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh,
+                                 std::unordered_map<PolyMesh::FaceHandle, bool> selectedFacesMap) {
     /*
          Case 1:       Case 2:
      
@@ -79,10 +88,16 @@ bool isHalfEdgeSelectionBoundary(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh) {
     PolyMesh::VertexHandle pointingVert = mesh.to_vertex_handle(heh);
     
     const bool isPointingVertSelected = mesh.status(pointingVert).selected();
-//    const bool isVertexInBoundary = mesh.is_boundary(pointingVert);
-//
-//    if(isPointingVertSelected && isVertexInBoundary)
-//        return true;
+    const bool isVertInBoundary = mesh.is_boundary(pointingVert);
+    const bool isHalfedgeIsBoundary = mesh.face_handle(heh) == PolyMesh::InvalidFaceHandle;
+    const bool isHalfedgeIsBelondToSelectedFace =
+        selectedFacesMap.find(mesh.face_handle(heh)) != selectedFacesMap.end();
+    
+    if(!isHalfedgeIsBelondToSelectedFace)
+        return false;
+    
+    if(isPointingVertSelected && isVertInBoundary && !isHalfedgeIsBoundary)
+        return true;
     
     PolyMesh::VertexHandle leftVert =
         mesh.to_vertex_handle(mesh.next_halfedge_handle(heh));
@@ -101,10 +116,12 @@ bool isHalfEdgeSelectionBoundary(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh) {
 }
 
 PolyMesh::HalfedgeHandle findSelectionBoundary(PolyMesh& mesh) {
+    std::unordered_map<PolyMesh::FaceHandle, bool> selFacesMap =
+        getSelectedFacesMap(getSelectedFaces(mesh));
     for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected())) {
         PolyMesh::VertexOHalfedgeCWIter vhIt;
         for (vhIt = mesh.voh_cwiter(vh); vhIt.is_valid(); vhIt++) {
-            if(isHalfEdgeSelectionBoundary(*vhIt, mesh)) {
+            if(isHalfEdgeSelectionBoundary(*vhIt, mesh, selFacesMap)) {
                 return *vhIt;
             }
         }
@@ -114,19 +131,24 @@ PolyMesh::HalfedgeHandle findSelectionBoundary(PolyMesh& mesh) {
 
 void SelectionBoundaryIter::next() {
     this->wasNext = true;
+    step++;
     PolyMesh::VertexHandle vert = mesh.to_vertex_handle(cur);
-    PolyMesh::VertexOHalfedgeCWIter vhIt;
-    for (vhIt = mesh.voh_cwiter(vert); vhIt.is_valid(); vhIt++) {
-        if(isHalfEdgeSelectionBoundary(*vhIt, mesh)) {
-            cur = *vhIt;
+    PolyMesh::VertexOHalfedgeCWIter hehIt;
+    for (hehIt = mesh.voh_cwiter(vert); hehIt.is_valid(); hehIt++) {
+        if(traversedHalfedges[*hehIt] > 0)
+            continue;
+        if(isHalfEdgeSelectionBoundary(*hehIt, mesh, selectedFacesMap)) {
+            cur = *hehIt;
+            traversedHalfedges[*hehIt]++;
             return;
         }
     }
     cur = PolyMesh::HalfedgeHandle();
 }
 
-SelectionBoundaryIter::SelectionBoundaryIter(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh):
-    start(heh), cur(heh), mesh(mesh) {}
+SelectionBoundaryIter::SelectionBoundaryIter(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh,
+                                             std::unordered_map<PolyMesh::FaceHandle, bool>& selectedFacesMap):
+    start(heh), cur(heh), mesh(mesh), selectedFacesMap(selectedFacesMap) {}
 
 void SelectionBoundaryIter::operator++(int n) {
     next();
@@ -141,27 +163,40 @@ PolyMesh::HalfedgeHandle SelectionBoundaryIter::current() {
 }
 
 bool SelectionBoundaryIter::isEnd() {
-    return (cur == this->start && this->wasNext) || cur == PolyMesh::HalfedgeHandle();
+    return (cur == this->start && this->wasNext) || cur == PolyMesh::HalfedgeHandle();// || step > 15;
 }
 
 bool SelectionBoundaryIter::isNotEnd() {
     return !this->isEnd();
 }
 
+void cleanSelectionBoundary(std::unordered_map<PolyMesh::HalfedgeHandle, bool>& knownHalfedges,
+                            std::list<PolyMesh::HalfedgeHandle>& boundary, PolyMesh& mesh) {
+    for(auto hehIt = boundary.begin(); hehIt != boundary.end(); hehIt++) {
+        if(knownHalfedges.find(mesh.opposite_halfedge_handle(*hehIt)) != knownHalfedges.end() &&
+           knownHalfedges.find(*hehIt) != knownHalfedges.end()) {
+            boundary.erase(hehIt);
+        }
+    }
+}
+
 std::list<std::list<PolyMesh::HalfedgeHandle>> findAllSelectionBoundaries(PolyMesh& mesh) {
+    std::unordered_map<PolyMesh::FaceHandle, bool> selFacesMap =
+        getSelectedFacesMap(getSelectedFaces(mesh));
     std::list<std::list<PolyMesh::HalfedgeHandle>> boundaries;
     std::unordered_map<PolyMesh::HalfedgeHandle, bool> knownHalfedges;
     for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected())) {
         PolyMesh::VertexOHalfedgeCWIter hehIt;
         for (hehIt = mesh.voh_cwiter(vh); hehIt.is_valid(); hehIt++) {
-            if(isHalfEdgeSelectionBoundary(*hehIt, mesh)) {
+            if(isHalfEdgeSelectionBoundary(*hehIt, mesh, selFacesMap)) {
                 if(knownHalfedges.find(*hehIt) == knownHalfedges.end()) {
-                    SelectionBoundaryIter itSb = SelectionBoundaryIter(*hehIt, mesh);
+                    SelectionBoundaryIter itSb = SelectionBoundaryIter(*hehIt, mesh, selFacesMap);
                     std::list<PolyMesh::HalfedgeHandle> boundary;
                     for(; itSb.isNotEnd(); itSb++) {
                         boundary.push_back(itSb.current());
                         knownHalfedges[itSb.current()] = true;
                     }
+                    cleanSelectionBoundary(knownHalfedges, boundary, mesh);
                     boundaries.push_back(boundary);
                 }
             }
@@ -173,68 +208,77 @@ std::list<std::list<PolyMesh::HalfedgeHandle>> findAllSelectionBoundaries(PolyMe
 void extrude(PolyMesh& mesh) {
     // Separate selected faces
     Duplicate top = duplicate(mesh);
-    
+
     // Delete vertices inside foundation boundaries
     for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected())) {
         if(!mesh.is_boundary(top.originalCopyPairs[vh])) {
             mesh.delete_vertex(vh);
         }
     }
+//
+//    // Move top inside
+//    glm::vec2 centroid;
+//    int numVertices = 0;
+//    for (auto vh : top.newVerts) {
+//        numVertices++;
+//        PolyMesh::Point point = mesh.point(vh);
+//        centroid += glm::vec2(point[0], point[1]);
+//    }
+//    centroid /= (float)numVertices;
+//    for(auto vh : top.newVerts) {
+//        PolyMesh::Point newPoint = mesh.point(vh);
+//        glm::vec2 pos = glm::vec2(newPoint[0], newPoint[1]);
+//        glm::vec2 relativePos = pos - centroid;
+//        relativePos *= 0.5f;
+//        glm::vec2 newPos = centroid + relativePos;
+//        newPoint[0] = newPos.x;
+//        newPoint[1] = newPos.y;
+//        mesh.set_point(vh, newPoint);
+//    }
     
-    // Move top inside
-    glm::vec2 centroid;
-    int numVertices = 0;
-    for (auto vh : top.newVerts) {
-        numVertices++;
-        PolyMesh::Point point = mesh.point(vh);
-        centroid += glm::vec2(point[0], point[1]);
-    }
-    centroid /= (float)numVertices;
-    for(auto vh : top.newVerts) {
-        PolyMesh::Point newPoint = mesh.point(vh);
-        glm::vec2 pos = glm::vec2(newPoint[0], newPoint[1]);
-        glm::vec2 relativePos = pos - centroid;
-        relativePos *= 0.5f;
-        glm::vec2 newPos = centroid + relativePos;
-        newPoint[0] = newPos.x;
-        newPoint[1] = newPos.y;
-        mesh.set_point(vh, newPoint);
-    }
-    
-    std::list<PolyMesh::HalfedgeHandle> selectBound;
-    for(SelectionBoundaryIter itSb = SelectionBoundaryIter(findSelectionBoundary(mesh), mesh);
-        itSb.isNotEnd(); itSb++) {
-        selectBound.push_back(itSb.current());
-        mesh.status(itSb.current()).set_selected(true);
+    // Find all selection boundaries
+    std::list<std::list<PolyMesh::HalfedgeHandle>> selectBounds = findAllSelectionBoundaries(mesh);
+    for (auto bound : selectBounds) {
+        for (PolyMesh::HalfedgeHandle heh : bound)
+            mesh.status(heh).set_selected(true);
     }
     
    // Delete bottom faces
-   for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected())) {
-       for(auto fh : mesh.vf_range(vh)) {
-           bool isAllFaceVertsSelected = true;
-           for(auto vfh : mesh.fv_range(fh)) {
-               if(!vfh.selected()) {
-                   isAllFaceVertsSelected = false;
-                   break;
-               }
-           }
-           if(isAllFaceVertsSelected) {
-               mesh.delete_face(fh);
-           }
-       }
-   }
+    std::list<PolyMesh::FaceHandle> facesToDelete;
+    std::unordered_map<PolyMesh::FaceHandle, bool> knownFacesToDelete;
+    for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected())) {
+        for(auto fh : mesh.vf_range(vh)) {
+            if(knownFacesToDelete.find(fh) != knownFacesToDelete.end())
+                continue;
+            knownFacesToDelete[fh] = true;
+            bool isAllFaceVertsSelected = true;
+            for(auto vfh : mesh.fv_range(fh)) {
+                if(!vfh.selected()) {
+                    isAllFaceVertsSelected = false;
+                    break;
+                }
+            }
+            if(isAllFaceVertsSelected) {
+                facesToDelete.push_back(fh);
+            }
+        }
+    }
+    for(auto fh : facesToDelete)
+        mesh.delete_face(fh);
     
     // Bridge selection boundary to separated faces
-    for(PolyMesh::HalfedgeHandle heh : selectBound) {
-        PolyMesh::VertexHandle edgeBottomOrigin = mesh.from_vertex_handle(heh);
-        PolyMesh::VertexHandle edgeBottomEnd = mesh.to_vertex_handle(heh);
-        PolyMesh::VertexHandle edgeTopOrigin = top.originalCopyPairs[edgeBottomOrigin];
-        PolyMesh::VertexHandle edgeTopEnd = top.originalCopyPairs[edgeBottomEnd];
-        std::vector<PolyMesh::VertexHandle> faceVerts = {
-            edgeBottomOrigin, edgeBottomEnd, edgeTopEnd, edgeTopOrigin
-//            edgeTopOrigin, edgeTopEnd, edgeBottomEnd, edgeBottomOrigin
-        };
-        mesh.add_face(faceVerts);
+    for (auto bound : selectBounds) {
+        for(PolyMesh::HalfedgeHandle heh : bound) {
+            PolyMesh::VertexHandle edgeBottomOrigin = mesh.from_vertex_handle(heh);
+            PolyMesh::VertexHandle edgeBottomEnd = mesh.to_vertex_handle(heh);
+            PolyMesh::VertexHandle edgeTopOrigin = top.originalCopyPairs[edgeBottomOrigin];
+            PolyMesh::VertexHandle edgeTopEnd = top.originalCopyPairs[edgeBottomEnd];
+            std::vector<PolyMesh::VertexHandle> faceVerts = {
+                edgeBottomOrigin, edgeBottomEnd, edgeTopEnd, edgeTopOrigin
+    //            edgeTopOrigin, edgeTopEnd, edgeBottomEnd, edgeBottomOrigin
+            };
+            mesh.add_face(faceVerts);
+        }
     }
     
     // Change selection to the top of extrusion
