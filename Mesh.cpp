@@ -148,6 +148,28 @@ bool SelectionBoundaryIter::isNotEnd() {
     return !this->isEnd();
 }
 
+std::list<std::list<PolyMesh::HalfedgeHandle>> findAllSelectionBoundaries(PolyMesh& mesh) {
+    std::list<std::list<PolyMesh::HalfedgeHandle>> boundaries;
+    std::unordered_map<PolyMesh::HalfedgeHandle, bool> knownHalfedges;
+    for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected())) {
+        PolyMesh::VertexOHalfedgeCWIter hehIt;
+        for (hehIt = mesh.voh_cwiter(vh); hehIt.is_valid(); hehIt++) {
+            if(isHalfEdgeSelectionBoundary(*hehIt, mesh)) {
+                if(knownHalfedges.find(*hehIt) == knownHalfedges.end()) {
+                    SelectionBoundaryIter itSb = SelectionBoundaryIter(*hehIt, mesh);
+                    std::list<PolyMesh::HalfedgeHandle> boundary;
+                    for(; itSb.isNotEnd(); itSb++) {
+                        boundary.push_back(itSb.current());
+                        knownHalfedges[itSb.current()] = true;
+                    }
+                    boundaries.push_back(boundary);
+                }
+            }
+        }
+    }
+    return boundaries;
+}
+
 void extrude(PolyMesh& mesh) {
     // Separate selected faces
     Duplicate top = duplicate(mesh);
