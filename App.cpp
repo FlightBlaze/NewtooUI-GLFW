@@ -174,6 +174,12 @@ int App::run()
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_E)
                         extrude(mesh);
                     
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_D) {
+                        for(auto heh : mesh.halfedges())
+                            mesh.status(heh).set_selected(false);
+                        extrude(mesh, true);
+                    }
+                    
 //                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
 //                        HE::HalfEdge* he = mesh.findDebugSelectedHalfEdge();
 //                        if(he != nullptr) {

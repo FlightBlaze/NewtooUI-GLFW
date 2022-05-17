@@ -177,8 +177,25 @@ bool SelectionBoundaryIter::isNotEnd() {
 void cleanSelectionBoundary(std::unordered_map<PolyMesh::HalfedgeHandle, bool>& knownHalfedges,
                             std::list<PolyMesh::HalfedgeHandle>& boundary, PolyMesh& mesh) {
     for(auto hehIt = boundary.begin(); hehIt != boundary.end(); hehIt++) {
-        if(knownHalfedges.find(mesh.opposite_halfedge_handle(*hehIt)) != knownHalfedges.end() &&
-           knownHalfedges.find(*hehIt) != knownHalfedges.end()) {
+        bool doubleSelected =
+            knownHalfedges.find(mesh.opposite_halfedge_handle(*hehIt)) != knownHalfedges.end() &&
+            knownHalfedges.find(*hehIt) != knownHalfedges.end();
+        if(doubleSelected) {
+            /*
+             ^------> ^------>
+             |      T C      |
+             |      | |      |
+             <------v <------v
+             */
+            auto sheh = OpenMesh::make_smart(*hehIt, mesh);
+            
+            bool isBetweenSelectedVerts =
+                (sheh.next().to().selected() || sheh.opp().prev().from().selected()) &&
+                (sheh.prev().from().selected() || sheh.opp().next().to().selected());
+            
+            if(!isBetweenSelectedVerts) {
+                mesh.status(mesh.opposite_halfedge_handle(*hehIt)).set_selected(false);
+            }
             boundary.erase(hehIt);
         }
     }
@@ -209,7 +226,17 @@ std::list<std::list<PolyMesh::HalfedgeHandle>> findAllSelectionBoundaries(PolyMe
     return boundaries;
 }
 
-void extrude(PolyMesh& mesh) {
+void extrude(PolyMesh& mesh, bool debug) {
+    // Find all selection boundaries
+    std::list<std::list<PolyMesh::HalfedgeHandle>> selectBounds = findAllSelectionBoundaries(mesh);
+    for (auto bound : selectBounds) {
+        for (PolyMesh::HalfedgeHandle heh : bound)
+            mesh.status(heh).set_selected(true);
+    }
+    
+    if(debug)
+        return;
+
     // Separate selected faces
     Duplicate top = duplicate(mesh);
 
@@ -240,13 +267,6 @@ void extrude(PolyMesh& mesh) {
 //        mesh.set_point(vh, newPoint);
 //    }
     
-    // Find all selection boundaries
-    std::list<std::list<PolyMesh::HalfedgeHandle>> selectBounds = findAllSelectionBoundaries(mesh);
-    for (auto bound : selectBounds) {
-        for (PolyMesh::HalfedgeHandle heh : bound)
-            mesh.status(heh).set_selected(true);
-    }
-    
    // Delete bottom faces
     std::list<PolyMesh::FaceHandle> facesToDelete;
     std::unordered_map<PolyMesh::FaceHandle, bool> knownFacesToDelete;
@@ -268,7 +288,7 @@ void extrude(PolyMesh& mesh) {
         }
     }
     for(auto fh : facesToDelete)
-        mesh.delete_face(fh);
+        mesh.delete_face(fh, false);
     
     // Bridge selection boundary to separated faces
     for (auto bound : selectBounds) {
@@ -368,6 +388,9 @@ void MeshViewer::draw(bvg::Context& ctx, bool isMouseDown, float mouseX, float m
     ctx.lineWidth = 2.0f;
     PolyMesh::VertexIter vIt, vEnd(mesh->vertices_end());
     for (vIt=mesh->vertices_begin(); vIt!=vEnd; vIt++) {
+        if(vIt->deleted())
+            continue;
+        
         PolyMesh::Point vertPoint = mesh->point(*vIt);
         glm::vec2 vertPos = glm::vec2(vertPoint[0], vertPoint[1]);
         

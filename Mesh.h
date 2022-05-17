@@ -35,7 +35,7 @@ public:
     bool isEnd();
 };
 
-void extrude(PolyMesh& mesh);
+void extrude(PolyMesh& mesh, bool debug = false);
 
 enum class CurrentTransform {
     None,
