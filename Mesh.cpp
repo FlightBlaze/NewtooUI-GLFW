@@ -103,20 +103,28 @@ bool isHalfEdgeSelectionBoundary(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh,
     if(isPointingVertSelected && isVertInBoundary && !isHalfedgeIsBoundary)
         return true;
     
-    PolyMesh::VertexHandle leftVert =
+    PolyMesh::VertexHandle leftFrontVert =
         mesh.to_vertex_handle(mesh.next_halfedge_handle(heh));
-    
-    PolyMesh::VertexHandle rightVert =
+    PolyMesh::VertexHandle rightFrontVert =
         mesh.from_vertex_handle(mesh.prev_halfedge_handle(mesh.opposite_halfedge_handle(heh)));
     
-    const bool isLeftVertSelected = mesh.status(leftVert).selected();
-    const bool isRightVertSelected = mesh.status(rightVert).selected();
+    PolyMesh::VertexHandle leftBackVert =
+        mesh.from_vertex_handle(mesh.prev_halfedge_handle(heh));
+    PolyMesh::VertexHandle rightBackVert =
+        mesh.to_vertex_handle(mesh.next_halfedge_handle(mesh.opposite_halfedge_handle(heh)));
+    
+    const bool isLeftFrontVertSelected = mesh.status(leftFrontVert).selected();
+    const bool isRightFrontVertSelected = mesh.status(rightFrontVert).selected();
+    
+    const bool isLeftBackVertSelected = mesh.status(leftBackVert).selected();
+    const bool isRightBackVertSelected = mesh.status(rightBackVert).selected();
     
     // If the current edge are between the perpendicular edge
     // with selected vertex and the one with not selected
-    const bool case1 = isLeftVertSelected && !isRightVertSelected;
+    const bool case1_1 = isLeftFrontVertSelected && !isRightFrontVertSelected;
+    const bool case1_2 = isLeftBackVertSelected && !isRightBackVertSelected;
 //    const bool case2 = !isLeftVertSelected && isRightVertSelected;
-    return isPointingVertSelected && (case1);// || case2);
+    return isPointingVertSelected && (case1_1 || case1_2);//(case1 || case2);
 }
 
 PolyMesh::HalfedgeHandle findSelectionBoundary(PolyMesh& mesh) {
@@ -187,15 +195,15 @@ void cleanSelectionBoundary(std::unordered_map<PolyMesh::HalfedgeHandle, bool>& 
              |      | |      |
              <------v <------v
              */
-            auto sheh = OpenMesh::make_smart(*hehIt, mesh);
-            
-            bool isBetweenSelectedVerts =
-                (sheh.next().to().selected() || sheh.opp().prev().from().selected()) &&
-                (sheh.prev().from().selected() || sheh.opp().next().to().selected());
-            
-            if(!isBetweenSelectedVerts) {
-                mesh.status(mesh.opposite_halfedge_handle(*hehIt)).set_selected(false);
-            }
+//            auto sheh = OpenMesh::make_smart(*hehIt, mesh);
+//
+//            bool isBetweenSelectedVerts =
+//                (sheh.next().to().selected() || sheh.opp().prev().from().selected()) &&
+//                (sheh.prev().from().selected() || sheh.opp().next().to().selected());
+//
+//            if(!isBetweenSelectedVerts) {
+//                mesh.status(mesh.opposite_halfedge_handle(*hehIt)).set_selected(false);
+//            }
             boundary.erase(hehIt);
         }
     }
