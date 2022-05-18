@@ -35,7 +35,25 @@ public:
     bool isEnd();
 };
 
+class EdgeLoopIter {
+    PolyMesh::HalfedgeHandle start;
+    PolyMesh::HalfedgeHandle cur;
+    PolyMesh& mesh;
+    bool wasNext = false;
+    
+    void next();
+    
+public:
+    EdgeLoopIter(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh);
+    void operator++(int n);
+    PolyMesh::HalfedgeHandle operator->();
+    PolyMesh::HalfedgeHandle current();
+    bool isNotEnd();
+    bool isEnd();
+};
+
 void extrude(PolyMesh& mesh, bool debug = false);
+void loopCut(PolyMesh& mesh, bool debug = false);
 
 enum class CurrentTransform {
     None,

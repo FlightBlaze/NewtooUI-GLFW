@@ -182,6 +182,73 @@ bool SelectionBoundaryIter::isNotEnd() {
     return !this->isEnd();
 }
 
+bool isNotSameFace(PolyMesh::FaceHandle a, PolyMesh::FaceHandle b) {
+    if(a == PolyMesh::InvalidFaceHandle || b == PolyMesh::InvalidFaceHandle)
+        return true;
+    
+    return a != b;
+}
+
+void EdgeLoopIter::next() {
+    this->wasNext = true;
+    /*
+     |<-------^|<-------^
+     |        ||        |
+     |   f3   N|   f4   |
+     | Other  || Other  |
+     V------->|V------->|
+     |<-------^|<-------^
+     |        ||        |
+     |   f1   C|   f2   |
+     |  Same  ||  Same  |
+     V------->|V------->|
+     */
+    const PolyMesh::FaceHandle curFace = mesh.face_handle(cur);
+    const PolyMesh::FaceHandle twinFace =
+        mesh.face_handle(mesh.opposite_halfedge_handle(cur));
+    
+    PolyMesh::VertexHandle vert = mesh.to_vertex_handle(cur);
+    
+    PolyMesh::VertexOHalfedgeCWIter hehIt;
+    for (hehIt = mesh.voh_cwiter(vert); hehIt.is_valid(); hehIt++) {
+        const auto twinHeh = hehIt->opp();
+        const PolyMesh::FaceHandle curHeFace = hehIt->face();
+        const PolyMesh::FaceHandle curTwinFace = twinHeh.face();
+        
+        // If this edge is not sharing the same
+        // faces as the current edge
+        if(isNotSameFace(curHeFace, curFace) && isNotSameFace(curHeFace, twinFace) &&
+           isNotSameFace(curTwinFace, curFace) && isNotSameFace(curTwinFace, twinFace)) {
+            this->cur = *hehIt;
+            return;
+        }
+    }
+    this->cur = PolyMesh::InvalidHalfedgeHandle;
+}
+
+EdgeLoopIter::EdgeLoopIter(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh):
+    start(heh), cur(heh), mesh(mesh) {}
+
+void EdgeLoopIter::operator++(int n) {
+    next();
+}
+
+PolyMesh::HalfedgeHandle EdgeLoopIter::operator->() {
+    return cur;
+}
+
+PolyMesh::HalfedgeHandle EdgeLoopIter::current() {
+    return cur;
+}
+
+bool EdgeLoopIter::isEnd() {
+    return (cur == this->start && this->wasNext) || cur == PolyMesh::InvalidHalfedgeHandle;
+}
+
+bool EdgeLoopIter::isNotEnd() {
+    return !this->isEnd();
+}
+
 void cleanSelectionBoundary(std::unordered_map<PolyMesh::HalfedgeHandle, bool>& knownHalfedges,
                             std::list<PolyMesh::HalfedgeHandle>& boundary, PolyMesh& mesh) {
     for(auto hehIt = boundary.begin(); hehIt != boundary.end(); hehIt++) {
@@ -326,6 +393,53 @@ void extrude(PolyMesh& mesh, bool debug) {
     }
 }
 
+std::list<PolyMesh::HalfedgeHandle> getLoopHalfedges(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh) {
+    std::list<PolyMesh::HalfedgeHandle> loop;
+    PolyMesh::HalfedgeHandle twin = mesh.opposite_halfedge_handle(heh);
+    PolyMesh::HalfedgeHandle end = PolyMesh::InvalidHalfedgeHandle;
+    for(auto hehIt = EdgeLoopIter(twin, mesh); hehIt.isNotEnd(); hehIt++) {
+        end = hehIt.current();
+    }
+    PolyMesh::HalfedgeHandle start = mesh.opposite_halfedge_handle(end);
+    for(auto hehIt = EdgeLoopIter(start, mesh); hehIt.isNotEnd(); hehIt++) {
+        loop.push_back(hehIt.current());
+    }
+    return loop;
+}
+
+void loopCut(PolyMesh& mesh, bool debug) {
+    std::vector<PolyMesh::VertexHandle> selVerts;
+    for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected()))
+        selVerts.push_back(vh);
+    
+    if(selVerts.size() < 2)
+        return;
+    
+    PolyMesh::HalfedgeHandle heh = mesh.find_halfedge(selVerts[0], selVerts[1]);
+    if(heh == PolyMesh::InvalidHalfedgeHandle)
+        return;
+    
+    OpenMesh::SmartHalfedgeHandle sheh = OpenMesh::make_smart(heh, mesh);
+    
+    /*
+     
+     |------^
+     |      |
+     v--C-->|
+     
+     */
+    
+    OpenMesh::SmartHalfedgeHandle left = sheh.prev().opp();
+    OpenMesh::SmartHalfedgeHandle right = sheh.next();
+    
+    for(auto heh : getLoopHalfedges(left, mesh)) {
+        mesh.status(heh).set_selected(true);
+    }
+    for(auto heh : getLoopHalfedges(right, mesh)) {
+        mesh.status(heh).set_selected(true);
+    }
+}
+
 MeshViewer::MeshViewer(PolyMesh* mesh):
     mesh(mesh) {}
 
@@ -436,6 +550,8 @@ void MeshViewer::draw(bvg::Context& ctx, bool isMouseDown, float mouseX, float m
         
         PolyMesh::VertexOHalfedgeCWIter hehIt;
         for (hehIt = mesh->voh_cwiter( *vIt ); hehIt.is_valid(); hehIt++) {
+            
+            //mesh->texcoord2D(*hehIt)
             
             PolyMesh::Point originPoint = mesh->point(hehIt->from());
             glm::vec2 originPos = glm::vec2(originPoint[0], originPoint[1]);

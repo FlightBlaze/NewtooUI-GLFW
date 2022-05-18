@@ -92,6 +92,8 @@ App::App():
     mesh.request_edge_status();
     mesh.request_halfedge_status();
     mesh.request_vertex_status();
+    mesh.request_halfedge_texcoords2D();
+    mesh.request_vertex_texcoords2D();
 }
 
 int App::run()
@@ -178,6 +180,12 @@ int App::run()
                         for(auto heh : mesh.halfedges())
                             mesh.status(heh).set_selected(false);
                         extrude(mesh, true);
+                    }
+                    
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_K) {
+                        for(auto heh : mesh.halfedges())
+                            mesh.status(heh).set_selected(false);
+                        loopCut(mesh, true);
                     }
                     
 //                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
