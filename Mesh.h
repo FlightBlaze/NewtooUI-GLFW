@@ -52,6 +52,8 @@ public:
     bool isEnd();
 };
 
+void selectEdgeLoop(PolyMesh& mesh);
+
 void extrude(PolyMesh& mesh, bool debug = false);
 void loopCut(PolyMesh& mesh, bool debug = false);
 

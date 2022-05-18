@@ -182,10 +182,19 @@ int App::run()
                         extrude(mesh, true);
                     }
                     
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_L)
+                        loopCut(mesh);
+                    
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_K) {
                         for(auto heh : mesh.halfedges())
                             mesh.status(heh).set_selected(false);
                         loopCut(mesh, true);
+                    }
+                    
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_SEMICOLON) {
+                        for(auto heh : mesh.halfedges())
+                            mesh.status(heh).set_selected(false);
+                        selectEdgeLoop(mesh);
                     }
                     
 //                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_RIGHT) {

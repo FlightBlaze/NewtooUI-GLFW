@@ -86,9 +86,11 @@ bool isHalfEdgeSelectionBoundary(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh,
         S        S    D        D
      */
     PolyMesh::VertexHandle pointingVert = mesh.to_vertex_handle(heh);
+    PolyMesh::VertexHandle originVert = mesh.from_vertex_handle(heh);
     
     const bool isPointingVertSelected = mesh.status(pointingVert).selected();
     const bool isVertInBoundary = mesh.is_boundary(pointingVert);
+    const bool isOriginInBoundary = mesh.is_boundary(originVert);
     const bool isHalfedgeIsBoundary = mesh.face_handle(heh) == PolyMesh::InvalidFaceHandle;
     const bool isHalfedgeIsBelongToSelectedFace =
         selectedFacesMap.find(mesh.face_handle(heh)) != selectedFacesMap.end();
@@ -100,8 +102,10 @@ bool isHalfEdgeSelectionBoundary(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh,
     if(!isHalfedgeIsBelongToSelectedFace)
         return false;
     
-    if(isPointingVertSelected && isVertInBoundary && !isHalfedgeIsBoundary)
+    if(isPointingVertSelected && isVertInBoundary &&
+       isOriginInBoundary && !isHalfedgeIsBoundary) {
         return true;
+    }
     
     PolyMesh::VertexHandle leftFrontVert =
         mesh.to_vertex_handle(mesh.next_halfedge_handle(heh));
@@ -407,6 +411,71 @@ std::list<PolyMesh::HalfedgeHandle> getLoopHalfedges(PolyMesh::HalfedgeHandle he
     return loop;
 }
 
+std::list<PolyMesh::HalfedgeHandle> getRingHalfedges(PolyMesh::HalfedgeHandle heh, PolyMesh& mesh) {
+    OpenMesh::SmartHalfedgeHandle start = OpenMesh::make_smart(heh, mesh);
+    
+    // Start halfedge must be inside the face
+    if(start.face() == PolyMesh::InvalidFaceHandle)
+        start = start.opp();
+    
+    /*
+    
+    ->| v-N-->
+    --^ <----^
+      L |    R
+    ->| v-C-->
+     
+     */
+    
+    std::unordered_map<PolyMesh::HalfedgeHandle, bool> knownHalfedges;
+    std::list<PolyMesh::HalfedgeHandle> ring;
+    
+    // Forward
+    OpenMesh::SmartHalfedgeHandle he = start;
+    do {
+        ring.push_back(he);
+        knownHalfedges[he] = true;
+        mesh.status(he).set_selected(true);
+        if(he.is_boundary()) {
+            break;
+        }
+        he = he.next().next().opp();
+    } while (he != start);
+    
+    // Backward
+    he = start;
+    do {
+        he = he.opp().prev().prev();
+        if(knownHalfedges.find(he) != knownHalfedges.end()) {
+            break;
+        }
+        if(he.is_boundary()) {
+            break;
+        }
+        ring.push_front(he);
+        knownHalfedges[he] = true;
+        mesh.status(he).set_selected(true);
+    } while (he != start);
+    
+    return ring;
+}
+
+void selectEdgeLoop(PolyMesh& mesh) {
+    std::vector<PolyMesh::VertexHandle> selVerts;
+    for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected()))
+        selVerts.push_back(vh);
+    
+    if(selVerts.size() < 2)
+        return;
+    
+    PolyMesh::HalfedgeHandle heh = mesh.find_halfedge(selVerts[0], selVerts[1]);
+    if(heh == PolyMesh::InvalidHalfedgeHandle)
+        return;
+    
+    for(auto lh : getLoopHalfedges(heh, mesh))
+        mesh.status(lh).set_selected(true);
+}
+
 void loopCut(PolyMesh& mesh, bool debug) {
     std::vector<PolyMesh::VertexHandle> selVerts;
     for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected()))
@@ -419,24 +488,54 @@ void loopCut(PolyMesh& mesh, bool debug) {
     if(heh == PolyMesh::InvalidHalfedgeHandle)
         return;
     
-    OpenMesh::SmartHalfedgeHandle sheh = OpenMesh::make_smart(heh, mesh);
+    std::list<PolyMesh::HalfedgeHandle> ring = getRingHalfedges(heh, mesh);
     
-    /*
-     
-     |------^
-     |      |
-     v--C-->|
-     
-     */
-    
-    OpenMesh::SmartHalfedgeHandle left = sheh.prev().opp();
-    OpenMesh::SmartHalfedgeHandle right = sheh.next();
-    
-    for(auto heh : getLoopHalfedges(left, mesh)) {
-        mesh.status(heh).set_selected(true);
+    for (auto he : ring) {
+        mesh.status(he).set_selected(true);
     }
-    for(auto heh : getLoopHalfedges(right, mesh)) {
-        mesh.status(heh).set_selected(true);
+    
+    if(debug)
+        return;
+    
+    std::vector<PolyMesh::VertexHandle> A, B, C;
+    
+    for (auto he : ring) {
+        PolyMesh::FaceHandle face = mesh.face_handle(he);
+        if(face != PolyMesh::InvalidFaceHandle) {
+            mesh.delete_face(face, false);
+        }
+    }
+    
+    for (auto he : ring) {
+        PolyMesh::VertexHandle from = mesh.from_vertex_handle(he);
+        PolyMesh::VertexHandle to = mesh.to_vertex_handle(he);
+        PolyMesh::Point mean = (mesh.point(from) + mesh.point(to)) / 2.0f;
+        A.push_back(from);
+        B.push_back(mesh.add_vertex(mean));
+        C.push_back(to);
+    }
+    
+    for(int i = 0; i < A.size() - 1; i++) {
+        /*
+            a1 - b1 - c1
+             |    |    |
+            a2 - b2 - c2
+         */
+        PolyMesh::VertexHandle a1 = A[i];
+        PolyMesh::VertexHandle a2 = A[i + 1];
+        PolyMesh::VertexHandle b1 = B[i];
+        PolyMesh::VertexHandle b2 = B[i + 1];
+        PolyMesh::VertexHandle c1 = C[i];
+        PolyMesh::VertexHandle c2 = C[i + 1];
+        std::vector<PolyMesh::VertexHandle> face;
+        face = {
+            a1, b1, b2, a2
+        };
+        mesh.add_face(face);
+        face = {
+            b1, c1, c2, b2
+        };
+        mesh.add_face(face);
     }
 }
 
