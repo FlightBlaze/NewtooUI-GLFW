@@ -99,14 +99,15 @@ App::App():
         L"Esc - exit halfedge demo",
         L"Left click - select vertex",
         L"Shift + Left click - select multiple vertices",
-        L"Hold G - move selection",
-        L"Hold S - scale selection",
+        L"Hold G - move",
+        L"Hold S - scale",
+        L"A - select/deselect all",
         L"E - extrude",
         L"L - loop cut",
         L"Z - subdivide",
-        L"; - select edge loop",
-        L"K - select edge ring",
-        L"D - selection boundary"
+        L"; - mark edge loop",
+        L"K - mark edge ring",
+        L"D - mark selection boundary"
     };
     for(auto line : lines) {
         heSummary.insert(heSummary.end(), line.begin(), line.end());
@@ -220,6 +221,23 @@ int App::run()
                         subdiv.attach(mesh);
                         subdiv(1);
                         subdiv.detach();
+                    }
+                    
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_A) {
+                        bool allSelected = true;
+                        for(auto vh : mesh.vertices()) {
+                            if(!vh.selected()) {
+                                allSelected = false;
+                                break;
+                            }
+                        }
+                        if(allSelected) {
+                            for(auto vh : mesh.vertices())
+                                mesh.status(vh).set_selected(false);
+                        } else {
+                            for(auto vh : mesh.vertices())
+                                mesh.status(vh).set_selected(true);
+                        }
                     }
                     
 //                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
@@ -499,7 +517,7 @@ void App::draw()
     switch(mDemoType) {
     case DemoType::HALF_EDGE:
     {
-        bvg::Color primaryColor = bvg::Color(1.0f, 0.5f, 0.0f);
+        bvg::Color primaryColor = bvg::Color(0.0f, 0.1f, 1.0f);
         bvg::Color primaryColorSemiTr = primaryColor;
         primaryColorSemiTr.a = 0.75f;
         bvg::Color primaryColorTr = primaryColor;
