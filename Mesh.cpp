@@ -481,7 +481,7 @@ void loopCut(PolyMesh& mesh, bool debug) {
     for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected()))
         selVerts.push_back(vh);
     
-    if(selVerts.size() < 2)
+    if(selVerts.size() != 2)
         return;
     
     PolyMesh::HalfedgeHandle heh = mesh.find_halfedge(selVerts[0], selVerts[1]);
@@ -490,12 +490,12 @@ void loopCut(PolyMesh& mesh, bool debug) {
     
     std::list<PolyMesh::HalfedgeHandle> ring = getRingHalfedges(heh, mesh);
     
-    for (auto he : ring) {
-        mesh.status(he).set_selected(true);
-    }
-    
-    if(debug)
+    if(debug) {
+        for (auto he : ring) {
+            mesh.status(he).set_selected(true);
+        }
         return;
+    }
     
     std::vector<PolyMesh::VertexHandle> A, B, C;
     
@@ -537,6 +537,12 @@ void loopCut(PolyMesh& mesh, bool debug) {
         };
         mesh.add_face(face);
     }
+    
+    for(auto vh : selVerts)
+        mesh.status(vh).set_selected(false);
+    
+    for(auto vh : B)
+        mesh.status(vh).set_selected(true);
 }
 
 MeshViewer::MeshViewer(PolyMesh* mesh):
