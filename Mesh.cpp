@@ -612,7 +612,7 @@ void MeshViewer::draw(bvg::Context& ctx, bool isMouseDown, float mouseX, float m
     
     ctx.fillStyle = bvg::SolidColor(bvg::colors::Black);
     ctx.strokeStyle = bvg::SolidColor(bvg::colors::Black);
-    ctx.lineWidth = 2.0f;
+    ctx.lineWidth = 1.0f;
     PolyMesh::VertexIter vIt, vEnd(mesh->vertices_end());
     for (vIt=mesh->vertices_begin(); vIt!=vEnd; vIt++) {
         if(vIt->deleted())
@@ -646,7 +646,7 @@ void MeshViewer::draw(bvg::Context& ctx, bool isMouseDown, float mouseX, float m
         }
         
         ctx.beginPath();
-        ctx.arc(vertPos.x, vertPos.y, 8.0f, 0.0f, M_PI * 2.0f);
+        ctx.arc(vertPos.x, vertPos.y, 3.0f, 0.0f, M_PI * 2.0f);
         ctx.convexFill();
         
 //        if(vert->edge == nullptr)
@@ -668,10 +668,10 @@ void MeshViewer::draw(bvg::Context& ctx, bool isMouseDown, float mouseX, float m
             glm::vec2 end = destPos;
             glm::vec2 dir = glm::normalize(end - start);
             glm::vec2 dirPerp = glm::vec2(dir.y, -dir.x);
-            glm::vec2 offset = dirPerp * -4.0f;
-            start += offset + dir * 12.0f;
-            end += offset - dir * 12.0f;
-            glm::vec2 arrowPoint = end - dir * 12.0f - dirPerp * 8.0f;
+            glm::vec2 offset = dirPerp * -2.0f;
+            start += offset + dir * 8.0f;
+            end += offset - dir * 8.0f;
+            glm::vec2 arrowPoint = end - dir * 6.0f - dirPerp * 4.0f;
             ctx.beginPath();
             ctx.moveTo(start.x, start.y);
             ctx.lineTo(end.x, end.y);

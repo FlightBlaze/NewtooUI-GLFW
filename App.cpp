@@ -94,6 +94,24 @@ App::App():
     mesh.request_vertex_status();
     mesh.request_halfedge_texcoords2D();
     mesh.request_vertex_texcoords2D();
+    
+    std::vector<std::wstring> lines = {
+        L"Esc - exit halfedge demo",
+        L"Left click - select vertex",
+        L"Shift + Left click - select multiple vertices",
+        L"Hold G - move selection",
+        L"Hold S - scale selection",
+        L"E - extrude",
+        L"L - loop cut",
+        L"Z - subdivide",
+        L"; - select edge loop",
+        L"K - select edge ring",
+        L"D - selection boundary"
+    };
+    for(auto line : lines) {
+        heSummary.insert(heSummary.end(), line.begin(), line.end());
+        heSummary.push_back(L'\n'); // line end
+    }
 }
 
 int App::run()
@@ -195,6 +213,13 @@ int App::run()
                         for(auto heh : mesh.halfedges())
                             mesh.status(heh).set_selected(false);
                         selectEdgeLoop(mesh);
+                    }
+                    
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_Z) {
+                        OpenMesh::Subdivider::Uniform::CatmullClarkT<PolyMesh> subdiv;
+                        subdiv.attach(mesh);
+                        subdiv(1);
+                        subdiv.detach();
                     }
                     
 //                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
@@ -486,6 +511,10 @@ void App::draw()
                                                primaryColorTr,
                                                primaryColorSemiTr);
         bvgCtx.print(L"Half Edge Data Structure", 10, 40);
+        
+        bvgCtx.fillStyle = bvg::SolidColor(primaryColor);
+        bvgCtx.fontSize = 16.0f;
+        bvgCtx.print(heSummary, 10, 100);
         
         meshViewer.draw(bvgCtx, isMouseDown, mMouseX, mMouseY);
     }

@@ -147,6 +147,7 @@ public:
 //    HE::MeshViewer meshViewer;
     PolyMesh mesh;
     MeshViewer meshViewer;
+    std::wstring heSummary;
     
     void doUI();
 };

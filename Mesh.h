@@ -8,6 +8,7 @@
 #pragma once
 
 #include <OpenMesh/Core/Mesh/PolyMesh_ArrayKernelT.hh>
+#include <OpenMesh/Tools/Subdivider/Uniform/CatmullClarkT.hh>
 #include <blazevg.hh>
 #include <list>
 #include <unordered_map>

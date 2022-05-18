@@ -150,4 +150,4 @@ add_subdirectory("submodules/OpenMesh")
 target_include_directories( MyProject PRIVATE
         "submodules/OpenMesh/src" )
 target_link_libraries( MyProject
-        OpenMeshCoreStatic )
+        OpenMeshCoreStatic OpenMeshToolsStatic )
