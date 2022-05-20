@@ -545,6 +545,226 @@ void loopCut(PolyMesh& mesh, bool debug) {
         mesh.status(vh).set_selected(true);
 }
 
+void swapFaceVertex(PolyMesh::FaceHandle face, PolyMesh::VertexHandle a,
+                    PolyMesh::VertexHandle b, PolyMesh& mesh) {
+    std::vector<PolyMesh::VertexHandle> newFaceVerts;
+    for(auto fvh : mesh.fv_ccw_range(face))
+        newFaceVerts.push_back(fvh != a? fvh : b);
+    mesh.delete_face(face, false);
+    mesh.add_face(newFaceVerts);
+}
+
+PolyMesh::VertexHandle rip(PolyMesh::HalfedgeHandle incomingHalfedge, PolyMesh& mesh,
+                           bool isOnBoundary = false) {
+    /*
+        *        *        *
+         ^------> ^------>
+         |      C |      |
+         |      | | face1|
+         <------v ^------>
+        *        &        *
+         ^------> ^------>
+         |      N |      |
+         |      | | face2|
+         <------v ^------>
+        *        *        *
+     */
+    OpenMesh::SmartHalfedgeHandle heh = OpenMesh::make_smart(incomingHalfedge, mesh);
+    
+    PolyMesh::VertexHandle vh = mesh.to_vertex_handle(heh);
+    PolyMesh::VertexHandle dupVert = mesh.add_vertex(mesh.point(vh));
+    
+    OpenMesh::SmartHalfedgeHandle nextHeh = heh.next().opp().next();
+    if(isOnBoundary)
+        nextHeh = heh.next();
+    
+    PolyMesh::FaceHandle leftFace1 = heh.face();
+    PolyMesh::FaceHandle leftFace2 = nextHeh.face();
+    
+    std::list<PolyMesh::FaceHandle> vertFacesToSwapVert;
+    for(auto vfh : mesh.vf_cw_range(vh)) {
+        if(vfh != leftFace1 && vfh != leftFace2)
+            vertFacesToSwapVert.push_back(vfh);
+    }
+    for(auto vfh : vertFacesToSwapVert) {
+        swapFaceVertex(vfh, vh, dupVert, mesh);
+    }
+    
+    return dupVert;
+}
+
+void openRegion(PolyMesh& mesh, bool debug) {
+    std::list<PolyMesh::VertexHandle> dupVerts;
+    for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected()))
+        dupVerts.push_back(rip(vh.in(), mesh));
+    
+    // Switch selection to duplicated verts
+    for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected()))
+        mesh.status(vh).set_selected(false);
+    for(auto vh : dupVerts)
+        mesh.status(vh).set_selected(true);
+}
+
+//PolyMesh::Point getFaceCentroid(PolyMesh::FaceHandle face, PolyMesh& mesh) {
+//    PolyMesh::Point point;
+//    int valence = 0;
+//    for(auto fvh : mesh.fv_cw_range(face)) {
+//        point += mesh.point(fvh);
+//        valence++;
+//    }
+//    point /= valence;
+//    return point;
+//}
+
+PolyMesh::Point lerpPoint(PolyMesh::Point a, PolyMesh::Point b, float t) {
+    return a + (b - a) * t;
+}
+
+// Quadratic bezier without end points
+std::vector<PolyMesh::Point> quadraticBezierInBetween(PolyMesh::Point p0, PolyMesh::Point p1,
+                                                      PolyMesh::Point p2, int numSegments) {
+    auto points = std::vector<PolyMesh::Point>(numSegments);
+    float step = 1.0f / (numSegments + 1);
+    float t = step;
+    for (int i = 0; i < numSegments; i++) {
+        PolyMesh::Point q0 = lerpPoint(p0, p1, t);
+        PolyMesh::Point q1 = lerpPoint(p1, p2, t);
+        PolyMesh::Point r  = lerpPoint(q0, q1, t);
+        points[i] = r;
+        t += step;
+    }
+    return points;
+}
+
+std::vector<PolyMesh::VertexHandle> makeBevelSegments(PolyMesh::Point p0, PolyMesh::Point p1,
+                                                      PolyMesh::Point p2, int numSegments,
+                                                      PolyMesh& mesh) {
+    std::vector<PolyMesh::Point> points = quadraticBezierInBetween(p0, p1, p2, numSegments);
+    std::vector<PolyMesh::VertexHandle> vertices;
+    vertices.reserve(points.size());
+    for(auto point : points)
+        vertices.push_back(mesh.add_vertex(point));
+    return vertices;
+}
+
+void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
+    std::vector<PolyMesh::VertexHandle> selVerts;
+    for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected()))
+        selVerts.push_back(vh);
+    
+    if(selVerts.size() < 2)
+        return;
+    
+    PolyMesh::HalfedgeHandle heh = mesh.find_halfedge(selVerts[0], selVerts[1]);
+    if(heh == PolyMesh::InvalidHalfedgeHandle)
+        return;
+    
+    std::vector<PolyMesh::VertexHandle> duplicates;
+    
+    std::list<PolyMesh::HalfedgeHandle> loop = getLoopHalfedges(heh, mesh);
+    PolyMesh::HalfedgeHandle begin = mesh.prev_halfedge_handle(loop.front());
+    if(mesh.is_boundary(begin) || mesh.is_boundary(mesh.opposite_halfedge_handle(begin)))
+        loop.push_front(begin);
+    
+    // For debug
+//    auto loopIt = loop.begin();
+//    auto heh1 = *loopIt;
+//    loopIt++;
+//    auto heh2 = *loopIt;
+//    loop.clear();
+//    loop.push_back(heh1);
+//    loop.push_back(heh2);
+    
+    std::unordered_map<PolyMesh::VertexHandle, PolyMesh::Point> leftDirections;
+    std::unordered_map<PolyMesh::VertexHandle, PolyMesh::Point> rightDirections;
+    std::list<std::vector<PolyMesh::VertexHandle>> bevelSegments;
+    
+    for(auto loopIt = loop.begin(); loopIt != loop.end(); loopIt++) {
+        OpenMesh::SmartHalfedgeHandle he;
+        PolyMesh::VertexHandle vh;
+        
+        // First halfedge may be on boundary and rotated so we take next
+        if(loopIt == loop.begin()) {
+            he = OpenMesh::make_smart(*std::next(loopIt), mesh);
+            vh = he.from();
+        } else {
+            he = OpenMesh::make_smart(*loopIt, mesh);
+            vh = he.to();
+        }
+        
+        /*
+              | ^
+              | |
+         <----v <----
+         */
+        
+        PolyMesh::Point toPoint = mesh.point(vh);
+        PolyMesh::Point leftPoint = mesh.point(he.next().to());
+        PolyMesh::Point rightPoint = mesh.point(he.opp().prev().from());
+        PolyMesh::Point dirA = (leftPoint - toPoint).normalize();
+        PolyMesh::Point dirB = -(rightPoint - toPoint).normalize();
+//        PolyMesh::Point dirLeft = (dirA + dirB) / 2.0f;
+        leftDirections[vh] = dirA;
+        rightDirections[vh] = -dirB;
+    }
+        
+    for(auto loopIt = loop.begin(); loopIt != loop.end(); loopIt++) {
+        auto lh = OpenMesh::make_smart(*loopIt, mesh);
+        PolyMesh::VertexHandle leftVert = mesh.to_vertex_handle(lh);
+        PolyMesh::Point point = mesh.point(leftVert);
+        PolyMesh::Point dirLeft = leftDirections[leftVert];
+        PolyMesh::Point dirRight = rightDirections[leftVert];//-dirLeft;
+        
+        bool isOnBoundary = loopIt == loop.begin() && lh.opp().is_boundary();
+        
+        PolyMesh::VertexHandle dupVert = rip(lh, mesh, isOnBoundary);
+        
+        PolyMesh::Point leftPoint = point + dirLeft * radius;
+        PolyMesh::Point rightPoint = point + dirRight * radius;
+        
+        mesh.set_point(leftVert, leftPoint);
+        mesh.set_point(dupVert, rightPoint);
+        
+        bevelSegments.push_back(makeBevelSegments(leftPoint, point, rightPoint, segments, mesh));
+        
+        duplicates.push_back(dupVert);
+    }
+    
+    if(bevelSegments.front().size() > 0) {
+        auto dupIt = duplicates.begin();
+        auto segIt = bevelSegments.begin();
+        for(auto loopIt = loop.begin(); loopIt != loop.end(); loopIt++) {
+            auto nextIt = std::next(loopIt);
+            if(nextIt == loop.end())
+                break;
+
+            auto nextDupIt = std::next(dupIt);
+            auto nextSegIt = std::next(segIt);
+            
+            PolyMesh::VertexHandle leftTop = mesh.to_vertex_handle(*loopIt);
+            PolyMesh::VertexHandle leftBottom = mesh.to_vertex_handle(*nextIt);
+            PolyMesh::VertexHandle rightTop = *dupIt;
+            PolyMesh::VertexHandle rightBottom = *nextDupIt;
+            
+            mesh.add_face(leftTop, segIt->front(), nextSegIt->front(), leftBottom);
+            mesh.add_face(rightTop, rightBottom, nextSegIt->back(), segIt->back());
+
+            for(int i = 0; i < segIt->size() - 1; i++)
+                mesh.add_face(segIt->at(i), segIt->at(i + 1),
+                              nextSegIt->at(i + 1), nextSegIt->at(i));
+            
+            dupIt++;
+            segIt++;
+        }
+    }
+        
+//    for(auto vh : selVerts)
+//        mesh.status(vh).set_selected(false);
+//
+//    for(auto vh : duplicates)
+//        mesh.status(vh).set_selected(true);
+}
+
 MeshViewer::MeshViewer(PolyMesh* mesh):
     mesh(mesh) {}
 

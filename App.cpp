@@ -240,6 +240,12 @@ int App::run()
                         }
                     }
                     
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_O)
+                        openRegion(mesh);
+                    
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_B)
+                        bevel(mesh, 3);
+                    
 //                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
 //                        HE::HalfEdge* he = mesh.findDebugSelectedHalfEdge();
 //                        if(he != nullptr) {

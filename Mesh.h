@@ -57,6 +57,8 @@ void selectEdgeLoop(PolyMesh& mesh);
 
 void extrude(PolyMesh& mesh, bool debug = false);
 void loopCut(PolyMesh& mesh, bool debug = false);
+void openRegion(PolyMesh& mesh, bool debug = false);
+void bevel(PolyMesh& mesh, int segments = 0, float radius = 30.0f, bool debug = false);
 
 enum class CurrentTransform {
     None,
