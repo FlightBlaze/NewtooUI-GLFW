@@ -137,12 +137,19 @@ Model createCubeModel() {
     face_vhandles.push_back(vhandle[4]);
     mesh.add_face(face_vhandles);
     
+    mesh.update_normals();
+    
     return model;
 }
 
 void Model::invalidate(DgRenderDevice renderDevice) {
     if(!isFlatShaded) {
         renderMesh = originalMesh;
+        auto rvhIt = renderMesh.vertices_begin();
+        for(auto ovh : originalMesh.vertices()) {
+            originalToRenderVerts[ovh] = *rvhIt;
+            rvhIt++;
+        }
     } else {
         renderMesh.clear();
         renderMesh.request_vertex_texcoords2D();
@@ -157,6 +164,7 @@ void Model::invalidate(DgRenderDevice renderDevice) {
                 renderMesh.set_texcoord2D(vhRender, originalMesh.texcoord2D(vhOriginal));
                 renderMesh.set_color(vhRender, originalMesh.color(vhOriginal));
                 faceVerts.push_back(vhRender);
+                originalToRenderVerts[vhOriginal] = vhRender;
             }
             renderMesh.add_face(faceVerts);
         }
@@ -231,15 +239,15 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice) {
     }
     
     int linesSize = 0;
-    for(auto vh : renderMesh.edges()) {
+    for(auto vh : originalMesh.edges()) {
         linesSize++;
     }
     std::vector<RenderLine> lines;
     lines.reserve(linesSize);
-    for(auto eh : renderMesh.edges()) {
+    for(auto eh : originalMesh.edges()) {
         RenderLine line;
-        line.a = indexProp[eh.v0()];
-        line.b = indexProp[eh.v1()];
+        line.a = indexProp[originalToRenderVerts[eh.v0()]];
+        line.b = indexProp[originalToRenderVerts[eh.v1()]];
         lines.push_back(line);
     }
     
@@ -313,7 +321,7 @@ ModelRenderer::ModelRenderer(DgRenderDevice renderDevice, DgSwapChain swapChain,
             renderDevice->CreateShader(ShaderCI, &pVS);
 
             Diligent::BufferDesc CBDesc;
-            CBDesc.Name = "Surfae VS constants CB";
+            CBDesc.Name = "Surface VS constants CB";
             CBDesc.Size = sizeof(RendererVSConstants);
             CBDesc.Usage = Diligent::USAGE_DYNAMIC;
             CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
@@ -357,22 +365,125 @@ ModelRenderer::ModelRenderer(DgRenderDevice renderDevice, DgSwapChain swapChain,
         PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements = _countof(LayoutElems);
         PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = Diligent::SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
 
-//        Diligent::ImmutableSamplerDesc samplers[] =
-//        {
-//            { Diligent::SHADER_TYPE_PIXEL, "g_Texture", Diligent::Sam_LinearClamp }
-//        };
-//        PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = samplers;
-//        PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(samplers);
+        Diligent::ShaderResourceVariableDesc variables[] =
+        {
+            { Diligent::SHADER_TYPE_PIXEL, "g_Texture", Diligent::SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE }
+        };
+        PSOCreateInfo.PSODesc.ResourceLayout.Variables = variables;
+        PSOCreateInfo.PSODesc.ResourceLayout.NumVariables = _countof(variables);
+        
+        Diligent::ImmutableSamplerDesc samplers[] =
+        {
+            { Diligent::SHADER_TYPE_PIXEL, "g_Texture", Diligent::Sam_LinearClamp }
+        };
+        PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = samplers;
+        PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(samplers);
         
         renderDevice->CreateGraphicsPipelineState(PSOCreateInfo, &surface.PSO);
 
-        surface.PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants")->Set(surface.VSConsts);
-//        surface.PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants")->Set(surface.PSConsts);
+        auto VSConstsVar = surface.PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants");
+        if(VSConstsVar != nullptr)
+            VSConstsVar->Set(surface.VSConsts);
+        
+        auto PSConstsVar = surface.PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants");
+        if(PSConstsVar != nullptr)
+            PSConstsVar->Set(surface.PSConsts);
 
         surface.PSO->CreateShaderResourceBinding(&surface.SRB, true);
         
-//        surface.SRB->GetVariableByName(Diligent::SHADER_TYPE_PIXEL, "g_Texture")->
-//            Set(matcap.textureSRV);
+        auto textureVar = surface.SRB->GetVariableByName(Diligent::SHADER_TYPE_PIXEL, "g_Texture");
+        if(textureVar != nullptr)
+            textureVar->Set(matcap.textureSRV);
+    }
+    
+    {
+        Diligent::GraphicsPipelineStateCreateInfo PSOCreateInfo;
+        PSOCreateInfo.PSODesc.Name = "Wireframe PSO";
+        PSOCreateInfo.PSODesc.PipelineType = Diligent::PIPELINE_TYPE_GRAPHICS;
+        PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
+        PSOCreateInfo.GraphicsPipeline.SmplDesc.Count = options.sampleCount;
+        PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = swapChain->GetDesc().ColorBufferFormat;
+        PSOCreateInfo.GraphicsPipeline.DSVFormat = swapChain->GetDesc().DepthBufferFormat;
+        PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_LINE_LIST;
+        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
+        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.AntialiasedLineEnable = Diligent::True;
+        PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::True;
+
+//        Diligent::BlendStateDesc BlendState;
+//        BlendState.RenderTargets[0].BlendEnable = Diligent::True;
+//        BlendState.RenderTargets[0].SrcBlend = Diligent::BLEND_FACTOR_SRC_ALPHA;
+//        BlendState.RenderTargets[0].DestBlend = Diligent::BLEND_FACTOR_INV_SRC_ALPHA;
+//        PSOCreateInfo.GraphicsPipeline.BlendDesc = BlendState;
+
+        Diligent::ShaderCreateInfo ShaderCI;
+        ShaderCI.SourceLanguage = Diligent::SHADER_SOURCE_LANGUAGE_HLSL;
+        ShaderCI.UseCombinedTextureSamplers = Diligent::True;
+
+        // Create a vertex shader
+        Diligent::RefCntAutoPtr<Diligent::IShader> pVS;
+        {
+            ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_VERTEX;
+            ShaderCI.EntryPoint = "main";
+            ShaderCI.Desc.Name = "Wireframe vertex shader";
+            ShaderCI.Source = RendererVSSource;
+            renderDevice->CreateShader(ShaderCI, &pVS);
+
+            Diligent::BufferDesc CBDesc;
+            CBDesc.Name = "Wireframe VS constants CB";
+            CBDesc.Size = sizeof(RendererVSConstants);
+            CBDesc.Usage = Diligent::USAGE_DYNAMIC;
+            CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
+            CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
+            renderDevice->CreateBuffer(CBDesc, nullptr, &wireframe.VSConsts);
+        }
+
+        // Create a pixel shader
+        Diligent::RefCntAutoPtr<Diligent::IShader> pPS;
+        {
+            ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_PIXEL;
+            ShaderCI.EntryPoint = "main";
+            ShaderCI.Desc.Name = "Wireframe pixel shader";
+            ShaderCI.Source = RendererWireframePSSource;
+            renderDevice->CreateShader(ShaderCI, &pPS);
+
+            Diligent::BufferDesc CBDesc;
+            CBDesc.Name = "Wireframe PS constants CB";
+            CBDesc.Size = sizeof(RendererPSConstants);
+            CBDesc.Usage = Diligent::USAGE_DYNAMIC;
+            CBDesc.BindFlags = Diligent::BIND_UNIFORM_BUFFER;
+            CBDesc.CPUAccessFlags = Diligent::CPU_ACCESS_WRITE;
+            renderDevice->CreateBuffer(CBDesc, nullptr, &wireframe.PSConsts);
+        }
+
+        PSOCreateInfo.pVS = pVS;
+        PSOCreateInfo.pPS = pPS;
+
+        Diligent::LayoutElement LayoutElems[] =
+        {
+            // Attribute 0 - vertex position
+            Diligent::LayoutElement{0, 0, 3, Diligent::VT_FLOAT32, Diligent::False},
+            // Attribute 1 - normal
+            Diligent::LayoutElement{1, 0, 3, Diligent::VT_FLOAT32, Diligent::False},
+            // Attribute 2 - texture coordinate
+            Diligent::LayoutElement{2, 0, 2, Diligent::VT_FLOAT32, Diligent::False},
+            // Attribute 3 - color
+            Diligent::LayoutElement{3, 0, 4, Diligent::VT_FLOAT32, Diligent::False},
+        };
+        PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = LayoutElems;
+        PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements = _countof(LayoutElems);
+        PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = Diligent::SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
+
+        renderDevice->CreateGraphicsPipelineState(PSOCreateInfo, &wireframe.PSO);
+
+        auto VSConstsVar = wireframe.PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_VERTEX, "Constants");
+        if(VSConstsVar != nullptr)
+            VSConstsVar->Set(wireframe.VSConsts);
+        
+        auto PSConstsVar = wireframe.PSO->GetStaticVariableByName(Diligent::SHADER_TYPE_PIXEL, "Constants");
+        if(PSConstsVar != nullptr)
+            PSConstsVar->Set(wireframe.PSConsts);
+
+        wireframe.PSO->CreateShaderResourceBinding(&wireframe.SRB, true);
     }
 }
 
@@ -384,19 +495,27 @@ Editor::Editor(DgRenderDevice renderDevice, DgSwapChain swapChain, Texture& matc
 }
 
 void ModelRenderer::draw(DgDeviceContext context,
-          glm::mat4 modelViewProj, glm::vec3 eye, Model& model) {
+          glm::mat4 modelViewProj, glm::mat4 modelView, Model& model) {
+    
+    RendererVSConstants VSConstants;
+    VSConstants.MVP = glm::transpose(modelViewProj);
+    VSConstants.normal = glm::transpose(glm::mat3(glm::transpose(glm::inverse(glm::mat4(1.0f)))));
     {
         Diligent::MapHelper<RendererVSConstants> CBConstants(context, surface.VSConsts,
             Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
-        RendererVSConstants constants;
-        constants.MVP = glm::transpose(modelViewProj);
-        *CBConstants = constants;
+        *CBConstants = VSConstants;
+    }
+    {
+        Diligent::MapHelper<RendererVSConstants> CBConstants(context, wireframe.VSConsts,
+            Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
+        *CBConstants = VSConstants;
     }
     {
         Diligent::MapHelper<RendererPSConstants> CBConstants(context, surface.PSConsts,
             Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
         RendererPSConstants constants;
-        constants.eye = eye;
+        constants.modelView = modelView;
+//        constants.eye = glm::normalize(-eye);
         *CBConstants = constants;
     }
 
@@ -405,19 +524,40 @@ void ModelRenderer::draw(DgDeviceContext context,
     context->SetVertexBuffers(0, 1, pBuffs, &offset,
         Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
         Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
-    context->SetIndexBuffer(model.triangleBuffer, 0,
-        Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    
+    // Surface
+    {
+        context->SetIndexBuffer(model.triangleBuffer, 0,
+            Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    context->SetPipelineState(surface.PSO);
+        context->SetPipelineState(surface.PSO);
 
-    context->CommitShaderResources(surface.SRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        context->CommitShaderResources(surface.SRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    Diligent::DrawIndexedAttribs DrawAttrs;
-    DrawAttrs.IndexType = Diligent::VT_UINT32;
-    DrawAttrs.NumIndices = model.numTrisIndices;
-    DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
+        Diligent::DrawIndexedAttribs DrawAttrs;
+        DrawAttrs.IndexType = Diligent::VT_UINT32;
+        DrawAttrs.NumIndices = model.numTrisIndices;
+        DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
 
-    context->DrawIndexed(DrawAttrs);
+        context->DrawIndexed(DrawAttrs);
+    }
+    
+    // Wireframe
+    {
+        context->SetIndexBuffer(model.lineBuffer, 0,
+            Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+        context->SetPipelineState(wireframe.PSO);
+
+        context->CommitShaderResources(wireframe.SRB, Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+        Diligent::DrawIndexedAttribs DrawAttrs;
+        DrawAttrs.IndexType = Diligent::VT_UINT32;
+        DrawAttrs.NumIndices = model.numLinesIndices;
+        DrawAttrs.Flags = Diligent::DRAW_FLAG_VERIFY_ALL;
+
+        context->DrawIndexed(DrawAttrs);
+    }
 }
 
 void Editor::input(bool isMouseDown, float mouseX, float mouseY) {
@@ -425,5 +565,5 @@ void Editor::input(bool isMouseDown, float mouseX, float mouseY) {
 }
 
 void Editor::draw(DgDeviceContext context) {
-    renderer.draw(context, viewProj, eye, *model);
+    renderer.draw(context, viewProj, view, *model);
 }

@@ -58,6 +58,8 @@ public:
     PolyMesh originalMesh;
     PolyMesh renderMesh;
     
+    std::unordered_map<PolyMesh::VertexHandle, PolyMesh::VertexHandle> originalToRenderVerts;
+    
     bool isFlatShaded = true;
     
     DgBuffer vertexBuffer, triangleBuffer, lineBuffer;
@@ -87,7 +89,7 @@ public:
 
     void draw(
         DgDeviceContext context,
-        glm::mat4 modelViewProj, glm::vec3 eye, Model& model);
+        glm::mat4 modelViewProj, glm::mat4 modelView, Model& model);
 
 private:
     RendererObjects surface;
@@ -100,6 +102,7 @@ public:
            RendererCreateOptions options);
     
     glm::mat4 viewProj;
+    glm::mat4 view;
     glm::vec3 eye;
     
     Texture matcap;
@@ -114,26 +117,53 @@ public:
 };
 
 struct RendererPSConstants {
-    glm::vec3 eye;
+    glm::mat4 modelView;
 };
 
 struct RendererVSConstants {
     glm::mat4 MVP;
+    glm::mat3 normal;
+    int32_t padding[4];
 };
 
-static const char* RendererPSSource = R"(
-cbuffer Constants
-{
-    float3 g_Eye;
-};
-
-//Texture2D    g_Texture;
-//SamplerState g_Texture_sampler;
+static const char* RendererWireframePSSource = R"(
+//cbuffer Constants
+//{
+//    float4x4 g_ModelView;
+//};
 
 struct PSInput
 {
     float4 Pos      : SV_POSITION;
-    float3 NormalWS : NORMALWS;
+    float3 Normal   : NORMAL;
+    float2 TexCoord : TEX_COORD;
+    float4 Color    : COLOR0;
+};
+struct PSOutput
+{
+    float4 Color : SV_TARGET;
+};
+
+void main(in  PSInput  PSIn,
+          out PSOutput PSOut)
+{
+    PSOut.Color = float4(0.0f, 0.0f, 0.0f, 1.0f);
+}
+)";
+
+static const char* RendererPSSource = R"(
+cbuffer Constants
+{
+    float4x4 g_ModelView;
+};
+
+Texture2D    g_Texture;
+SamplerState g_Texture_sampler;
+
+struct PSInput
+{
+    float4 Pos      : SV_POSITION;
+    float3 Normal   : NORMAL;
     float2 TexCoord : TEX_COORD;
     float4 Color    : COLOR0;
 };
@@ -152,9 +182,10 @@ float2 matcap(float3 eye, float3 normal) {
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
-    float3 no = PSIn.NormalWS / 2.0 + 0.5;
-    PSOut.Color = float4(no.x, no.y, no.z, 1.0f);
-    //g_Texture.Sample(g_Texture_sampler, matcap(g_Eye, PSIn.NormalWS));
+    float3 no = PSIn.Normal / 2.0 + 0.5;
+    float3 eye = normalize(float3(mul(PSIn.Pos, g_ModelView)));
+    PSOut.Color = g_Texture.Sample(g_Texture_sampler, matcap(eye, PSIn.Normal));
+    // float4(no.x, no.y, no.z, 1.0f);
 }
 )";
 
@@ -162,6 +193,7 @@ static const char* RendererVSSource = R"(
 cbuffer Constants
 {
     float4x4 g_ModelViewProj;
+    float3x3 g_Normal;
 };
 
 struct VSInput
@@ -175,7 +207,7 @@ struct VSInput
 struct PSInput
 {
     float4 Pos      : SV_POSITION;
-    float3 NormalWS : NORMALWS;
+    float3 Normal   : NORMAL;
     float2 TexCoord : TEX_COORD;
     float4 Color    : COLOR0;
 };
@@ -185,7 +217,7 @@ void main(in  VSInput VSIn,
 {
     PSIn.Pos = mul(float4(VSIn.Pos, 1.0), g_ModelViewProj);
     PSIn.TexCoord = VSIn.TexCoord;
-    PSIn.NormalWS = VSIn.Normal;
+    PSIn.Normal = VSIn.Normal;
     PSIn.Color = VSIn.Color;
 }
 )";

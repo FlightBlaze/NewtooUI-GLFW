@@ -536,8 +536,9 @@ void App::draw()
     bool flipY = normalizedPitch < 90.0f || normalizedPitch >= 270.0f;
     glm::vec3 up = glm::vec3(0.0, flipY ? 1.0 : -1.0, 0.0);
     
-    glm::mat4 vp = glm::perspective(45.0f, (float)mWidth / (float)mHeight, 0.01f, 100.0f) *
-        glm::lookAt(eye, glm::vec3(0.0f), up);
+    glm::mat4 view = glm::lookAt(eye, glm::vec3(0.0f), up);
+    
+    glm::mat4 vp = glm::perspective(45.0f, (float)mWidth / (float)mHeight, 0.01f, 100.0f) * view;
     
     switch(mDemoType) {
     case DemoType::HALF_EDGE:
@@ -565,6 +566,7 @@ void App::draw()
     case DemoType::HALF_EDGE_3D:
     {
         editor->viewProj = vp;
+        editor->view = view;
         editor->eye = eye;
         editor->draw(mImmediateContext);
     }
@@ -1118,9 +1120,10 @@ void App::initializeResources()
     // Halfedge 3D editor
     
     model = createCubeModel();
+    model.isFlatShaded = true;
     {
         int width, height, numChannels;
-        unsigned char* imageData = stbi_load("assets/Roboto/Roboto-Regular.png",
+        unsigned char* imageData = stbi_load("assets/matcap.png",
                                              &width, &height, &numChannels, 0);
         
         Texture matcap = Texture(mDevice, mSwapChain->GetDesc().ColorBufferFormat,
