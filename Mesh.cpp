@@ -593,7 +593,64 @@ PolyMesh::VertexHandle rip(PolyMesh::HalfedgeHandle incomingHalfedge, PolyMesh& 
     return dupVert;
 }
 
+//std::list<std::list<PolyMesh::HalfedgeHandle>> traceSelection(PolyMesh& mesh) {
+//    std::list<std::list<PolyMesh::HalfedgeHandle>> boundaries;
+//    std::unordered_map<PolyMesh::HalfedgeHandle, bool> knownHalfedges;
+//    for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected())) {
+//        PolyMesh::VertexOHalfedgeCWIter hehIt;
+//        for (hehIt = mesh.voh_cwiter(vh); hehIt.is_valid(); hehIt++) {
+//            if(mesh.status(mesh.to_vertex_handle(*hehIt)).selected()) {
+//                if(knownHalfedges.find(*hehIt) == knownHalfedges.end()) {
+//                    std::list<PolyMesh::HalfedgeHandle> boundary;
+//                    PolyMesh::HalfedgeHandle cur = *hehIt;
+//                    do {
+//                        if(knownHalfedges.find(cur) != knownHalfedges.end())
+//                            break;
+//                        bool nextFound = false;
+//                        PolyMesh::VertexOHalfedgeCWIter nextHehIt;
+//                        for (nextHehIt = mesh.voh_cwiter(mesh.to_vertex_handle(cur));
+//                             nextHehIt.is_valid(); nextHehIt++) {
+//                            if(mesh.status(mesh.to_vertex_handle(*nextHehIt)).selected()) {
+//                                nextFound = true;
+//                                cur = *nextHehIt;
+//                                break;
+//                            }
+//                        }
+//                        if(!nextFound)
+//                            break;
+//                        boundary.push_back(cur);
+//                        knownHalfedges[cur] = true;
+//                    } while(cur != *hehIt);
+//                    cleanSelectionBoundary(knownHalfedges, boundary, mesh);
+//                    boundaries.push_back(boundary);
+//                }
+//            }
+//        }
+//    }
+//    return boundaries;
+//}
+
 void openRegion(PolyMesh& mesh, bool debug) {
+//    int numSel = 0;
+//    for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected())) {
+//        numSel++;
+//    }
+//
+//    if(numSel < 2)
+//        return;
+//
+//    for(auto heh : mesh.halfedges())
+//        mesh.status(heh).set_selected(false);
+//
+//    std::list<std::list<PolyMesh::HalfedgeHandle>> traced = traceSelection(mesh);
+//    for(auto boundary : traced) {
+//        for(auto heh : boundary) {
+//            mesh.status(heh).set_selected(true);
+//        }
+//    }
+//
+//    return;
+    
     std::list<PolyMesh::VertexHandle> dupVerts;
     for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected()))
         dupVerts.push_back(rip(vh.in(), mesh));
@@ -659,8 +716,6 @@ void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
     if(heh == PolyMesh::InvalidHalfedgeHandle)
         return;
     
-    std::vector<PolyMesh::VertexHandle> duplicates;
-    
     std::list<PolyMesh::HalfedgeHandle> loop = getLoopHalfedges(heh, mesh);
     PolyMesh::HalfedgeHandle begin = mesh.prev_halfedge_handle(loop.front());
     if(mesh.is_boundary(begin) || mesh.is_boundary(mesh.opposite_halfedge_handle(begin)))
@@ -678,6 +733,7 @@ void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
     std::unordered_map<PolyMesh::VertexHandle, PolyMesh::Point> leftDirections;
     std::unordered_map<PolyMesh::VertexHandle, PolyMesh::Point> rightDirections;
     std::list<std::vector<PolyMesh::VertexHandle>> bevelSegments;
+    std::list<PolyMesh::VertexHandle> duplicates;
     
     for(auto loopIt = loop.begin(); loopIt != loop.end(); loopIt++) {
         OpenMesh::SmartHalfedgeHandle he;
@@ -765,10 +821,10 @@ void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
 //        mesh.status(vh).set_selected(true);
 }
 
-MeshViewer::MeshViewer(PolyMesh* mesh):
+MeshViewer2D::MeshViewer2D(PolyMesh* mesh):
     mesh(mesh) {}
 
-void MeshViewer::draw(bvg::Context& ctx, bool isMouseDown, float mouseX, float mouseY) {
+void MeshViewer2D::draw(bvg::Context& ctx, bool isMouseDown, float mouseX, float mouseY) {
     if(mesh == nullptr)
         return;
     

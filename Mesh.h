@@ -8,6 +8,7 @@
 #pragma once
 
 #include <OpenMesh/Core/Mesh/PolyMesh_ArrayKernelT.hh>
+#include <OpenMesh/Core/Utils/PropertyManager.hh>
 #include <OpenMesh/Tools/Subdivider/Uniform/CatmullClarkT.hh>
 #include <blazevg.hh>
 #include <list>
@@ -66,7 +67,7 @@ enum class CurrentTransform {
     Scale
 };
 
-class MeshViewer {
+class MeshViewer2D {
     float lastMouseX, lastMouseY;
     
 public:
@@ -75,7 +76,7 @@ public:
     CurrentTransform currentTransform = CurrentTransform::None;
     bool shiftPressed = false;
     
-    MeshViewer(PolyMesh* mesh);
+    MeshViewer2D(PolyMesh* mesh);
     
     void draw(bvg::Context& ctx, bool isMouseDown, float mouseX, float mouseY);
 };

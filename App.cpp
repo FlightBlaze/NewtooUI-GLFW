@@ -158,28 +158,7 @@ int App::run()
 				quit = true;
 				break;
             case SDL_KEYDOWN:
-                if(mDemoType != DemoType::HALF_EDGE) {
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
-                        mIsControlPressed = true;
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_T)
-                        mGizmoTool = gizmo::GizmoTool::Translate;
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_R)
-                        mGizmoTool = gizmo::GizmoTool::Rotate;
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_S)
-                        mGizmoTool = gizmo::GizmoTool::Scale;
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_N)
-                        mGizmoProps.enabledRotationSnap = !mGizmoProps.enabledRotationSnap;
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_SPACE)
-                        mPlayRotation = !mPlayRotation;
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_G)
-                        mDemoType = DemoType::GIZMOS;
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_V)
-                        mDemoType = DemoType::VECTOR_GRAPHICS;
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_U)
-                        mDemoType = DemoType::UI;
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_H)
-                        mDemoType = DemoType::HALF_EDGE;
-                } else { // if half edge
+                if(mDemoType == DemoType::HALF_EDGE) {
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
                         mDemoType = DemoType::VECTOR_GRAPHICS;
                     
@@ -268,6 +247,34 @@ int App::run()
 //                            he->isDebugSelected = false;
 //                        }
 //                    }
+                } else if(mDemoType == DemoType::HALF_EDGE_3D) {
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+                        mDemoType = DemoType::VECTOR_GRAPHICS;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
+                        mIsControlPressed = true;
+                } else {
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
+                        mIsControlPressed = true;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_T)
+                        mGizmoTool = gizmo::GizmoTool::Translate;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_R)
+                        mGizmoTool = gizmo::GizmoTool::Rotate;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_S)
+                        mGizmoTool = gizmo::GizmoTool::Scale;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_N)
+                        mGizmoProps.enabledRotationSnap = !mGizmoProps.enabledRotationSnap;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_SPACE)
+                        mPlayRotation = !mPlayRotation;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_G)
+                        mDemoType = DemoType::GIZMOS;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_V)
+                        mDemoType = DemoType::VECTOR_GRAPHICS;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_U)
+                        mDemoType = DemoType::UI;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_H)
+                        mDemoType = DemoType::HALF_EDGE;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_3)
+                        mDemoType = DemoType::HALF_EDGE_3D;
                 }
                 break;
             case SDL_KEYUP:
@@ -520,6 +527,18 @@ void App::draw()
     
     bvgCtx.font = bvgCtx.fonts["roboto-regular"];
     
+    float eyeX = sin(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * mZoom;
+    float eyeY = sin(glm::radians(mPitch)) * mZoom;
+    float eyeZ = cos(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * mZoom;
+    glm::vec3 eye = glm::vec3(eyeX, eyeY, eyeZ);
+    
+    float normalizedPitch = degreesInRange(mPitch);
+    bool flipY = normalizedPitch < 90.0f || normalizedPitch >= 270.0f;
+    glm::vec3 up = glm::vec3(0.0, flipY ? 1.0 : -1.0, 0.0);
+    
+    glm::mat4 vp = glm::perspective(45.0f, (float)mWidth / (float)mHeight, 0.01f, 100.0f) *
+        glm::lookAt(eye, glm::vec3(0.0f), up);
+    
     switch(mDemoType) {
     case DemoType::HALF_EDGE:
     {
@@ -543,20 +562,15 @@ void App::draw()
         meshViewer.draw(bvgCtx, isMouseDown, mMouseX, mMouseY);
     }
         break;
+    case DemoType::HALF_EDGE_3D:
+    {
+        editor->viewProj = vp;
+        editor->eye = eye;
+        editor->draw(mImmediateContext);
+    }
+        break;
     case DemoType::GIZMOS:
     {
-        float eyeX = sin(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * mZoom;
-        float eyeY = sin(glm::radians(mPitch)) * mZoom;
-        float eyeZ = cos(glm::radians(mYaw)) * cos(glm::radians(mPitch)) * mZoom;
-        glm::vec3 eye = glm::vec3(eyeX, eyeY, eyeZ);
-        
-        float normalizedPitch = degreesInRange(mPitch);
-        bool flipY = normalizedPitch < 90.0f || normalizedPitch >= 270.0f;
-        glm::vec3 up = glm::vec3(0.0, flipY ? 1.0 : -1.0, 0.0);
-        
-        glm::mat4 vp = glm::perspective(45.0f, (float)mWidth / (float)mHeight, 0.01f, 100.0f) *
-            glm::lookAt(eye, glm::vec3(0.0f), up);
-        
         bool blockMouseEvent = mIsControlPressed;
         
         if(mPlayRotation) {
@@ -1091,13 +1105,33 @@ void App::initializeResources()
     
     std::string fontJson = LoadTextResource("Roboto/Roboto-Regular.json");
     
-    int width, height, numChannels;
-    unsigned char* imageData = stbi_load("assets/Roboto/Roboto-Regular.png",
-                                         &width, &height, &numChannels, 0);
-    bvgCtx.loadFontFromMemory(fontJson, "roboto-regular", imageData, width, height, numChannels);
-    stbi_image_free(imageData);
+    {
+        int width, height, numChannels;
+        unsigned char* imageData = stbi_load("assets/Roboto/Roboto-Regular.png",
+                                             &width, &height, &numChannels, 0);
+        bvgCtx.loadFontFromMemory(fontJson, "roboto-regular", imageData, width, height, numChannels);
+        stbi_image_free(imageData);
+    }
     
     recreateRenderTargets();
+    
+    // Halfedge 3D editor
+    
+    model = createCubeModel();
+    {
+        int width, height, numChannels;
+        unsigned char* imageData = stbi_load("assets/Roboto/Roboto-Regular.png",
+                                             &width, &height, &numChannels, 0);
+        
+        Texture matcap = Texture(mDevice, mSwapChain->GetDesc().ColorBufferFormat,
+                                 imageData, width, height, numChannels);
+        RendererCreateOptions options;
+        options.sampleCount = 2;
+        stbi_image_free(imageData);
+        editor = std::make_shared<Editor>(mDevice, mSwapChain, matcap, options);
+        editor->model = &model;
+        model.invalidate(mDevice);
+    }
 }
 
 void App::recreateRenderTargets() {

@@ -9,6 +9,7 @@
 #include <Context.h>
 #include <HalfEdge.h>
 #include <Mesh.h>
+#include <Editor.hpp>
 // #include <GLFW/glfw3.h>
 #include <SDL.h>
 #include <glm/glm.hpp>
@@ -35,7 +36,8 @@ enum class DemoType {
     VECTOR_GRAPHICS,
     GIZMOS,
     UI,
-    HALF_EDGE
+    HALF_EDGE,
+    HALF_EDGE_3D
 };
 
 class App {
@@ -146,8 +148,11 @@ public:
 //    HE::Mesh mesh;
 //    HE::MeshViewer meshViewer;
     PolyMesh mesh;
-    MeshViewer meshViewer;
+    MeshViewer2D meshViewer;
     std::wstring heSummary;
+    
+    Model model;
+    std::shared_ptr<Editor> editor;
     
     void doUI();
 };
