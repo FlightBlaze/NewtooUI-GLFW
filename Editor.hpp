@@ -62,7 +62,7 @@ public:
     
     bool isFlatShaded = true;
     
-    DgBuffer vertexBuffer, triangleBuffer, lineBuffer;
+    DgBuffer vertexBuffer, triangleBuffer, lineBuffer, wireframeVertexBuffer;
     int numTrisIndices = 0;
     int numLinesIndices = 0;
     
@@ -147,7 +147,7 @@ struct PSOutput
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
-    PSOut.Color = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    PSOut.Color = float4(0.05f, 0.05f, 0.05f, 1.0f);
 }
 )";
 
@@ -179,12 +179,26 @@ float2 matcap(float3 eye, float3 normal) {
     return reflected.xy / m + 0.5;
 }
 
+float2 matcap2(float3 normal) {
+    float3 viewNormal = float3(mul(float4(normalize(normal), 1.0), g_ModelView));
+    // float m = 2.8284271247461903 * sqrt(viewNormal.z + 1.0);
+    float m = 2.0 * sqrt(
+        pow(viewNormal.x, 2.0) +
+        pow(viewNormal.y, 2.0) +
+        pow(viewNormal.z + 1.0, 2.0)
+   );
+    return viewNormal.xy / 2.8284271247461903 + 0.5;
+}
+
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
     float3 no = PSIn.Normal / 2.0 + 0.5;
     float3 eye = normalize(float3(mul(PSIn.Pos, g_ModelView)));
-    PSOut.Color = g_Texture.Sample(g_Texture_sampler, matcap(eye, PSIn.Normal));
+    float3 base = g_Texture.Sample(g_Texture_sampler, matcap2(PSIn.Normal)).rgb;
+    PSOut.Color = float4(base, 1.0);
+    // PSOut.Color = float4(-float3(mul(float4(normalize(-PSIn.Normal), 1.0), g_ModelView)), 1.0);
+    // PSOut.Color = g_Texture.Sample(g_Texture_sampler, float2(PSIn.Pos.x / 1280.0, PSIn.Pos.y / 720.0));
     // float4(no.x, no.y, no.z, 1.0f);
 }
 )";
@@ -216,6 +230,40 @@ void main(in  VSInput VSIn,
           out PSInput PSIn)
 {
     PSIn.Pos = mul(float4(VSIn.Pos, 1.0), g_ModelViewProj);
+    PSIn.TexCoord = VSIn.TexCoord;
+    PSIn.Normal = VSIn.Normal;//mul(VSIn.Normal, g_Normal);
+    PSIn.Color = VSIn.Color;
+}
+)";
+
+static const char* RendererWireframeVSSource = R"(
+cbuffer Constants
+{
+    float4x4 g_ModelViewProj;
+    float3x3 g_Normal;
+};
+
+struct VSInput
+{
+    float3 Pos      : ATTRIB0;
+    float3 Normal   : ATTRIB1;
+    float2 TexCoord : ATTRIB3;
+    float4 Color    : ATTRIB2;
+};
+
+struct PSInput
+{
+    float4 Pos      : SV_POSITION;
+    float3 Normal   : NORMAL;
+    float2 TexCoord : TEX_COORD;
+    float4 Color    : COLOR0;
+};
+
+void main(in  VSInput VSIn,
+          out PSInput PSIn)
+{
+    PSIn.Pos = mul(float4(VSIn.Pos, 1.0), g_ModelViewProj);
+//    PSIn.Pos += float4(PSIn.Normal * 0.1, 0.0f);
     PSIn.TexCoord = VSIn.TexCoord;
     PSIn.Normal = VSIn.Normal;
     PSIn.Color = VSIn.Color;

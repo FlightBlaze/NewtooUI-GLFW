@@ -1126,7 +1126,7 @@ void App::initializeResources()
         unsigned char* imageData = stbi_load("assets/matcap.png",
                                              &width, &height, &numChannels, 0);
         
-        Texture matcap = Texture(mDevice, mSwapChain->GetDesc().ColorBufferFormat,
+        Texture matcap = Texture(mDevice, Diligent::TEX_FORMAT_BGRA8_UNORM_SRGB,
                                  imageData, width, height, numChannels);
         RendererCreateOptions options;
         options.sampleCount = 2;

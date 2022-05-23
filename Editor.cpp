@@ -25,6 +25,21 @@ void* convertRGBToRGBA(char* imageData,
     return newImage;
 }
 
+void* convertRGBAToBGRA(char* imageData,
+                       int width,
+                       int height)
+{
+    char* newImage = new char[width * height * 4];
+    for(size_t i = 0; i < width * height; i++) {
+        size_t index = i * 4LL;
+        newImage[index] = imageData[index + 2LL]; // Red -> Blue
+        newImage[index + 1LL] = imageData[index + 1LL]; // Green
+        newImage[index + 2LL] = imageData[index]; // Blue -> Red
+        newImage[index + 3LL] = imageData[index + 3LL]; // Alpha
+    }
+    return newImage;
+}
+
 Texture::Texture(DgRenderDevice renderDevice,
                  Diligent::TEXTURE_FORMAT colorBufferFormat,
                      void* imageData,
@@ -38,6 +53,16 @@ Texture::Texture(DgRenderDevice renderDevice,
     if(numChannels == 3) {
         RGBAStride = width * 4;
         imageData = convertRGBToRGBA((char*)imageData, width, height);
+    }
+    
+    bool isBGRA = false;
+    if(colorBufferFormat == Diligent::TEX_FORMAT_BGRA8_UNORM ||
+       colorBufferFormat == Diligent::TEX_FORMAT_BGRA8_UNORM_SRGB) {
+        isBGRA = true;
+        void* newImageData = convertRGBAToBGRA((char*)imageData, width, height);
+        if(numChannels == 3)
+            delete[] (char*)imageData;
+        imageData = newImageData;
     }
 
     Diligent::TextureSubResData SubRes;
@@ -59,7 +84,7 @@ Texture::Texture(DgRenderDevice renderDevice,
     renderDevice->CreateTexture(TexDesc, &TexData, &texture);
     textureSRV = texture->GetDefaultView(Diligent::TEXTURE_VIEW_SHADER_RESOURCE);
     
-    if(numChannels == 3) {
+    if(numChannels == 3 || isBGRA) {
         delete[] (char*)imageData;
     }
 }
@@ -191,6 +216,24 @@ glm::vec4 vec4FromColor(PolyMesh::Color col) {
     return glm::vec4(col[0], col[1], col[2], 1.0f);
 }
 
+void addQuad(std::vector<RenderTriange>& list, int offset, int v0, int v1, int v2, int v3) {
+    /*
+       v0     v1
+     
+       v3     v2
+     */
+    RenderTriange tri1;
+    tri1.a = v0 + offset;
+    tri1.b = v1 + offset;
+    tri1.c = v3 + offset;
+    RenderTriange tri2;
+    tri2.a = v3 + offset;
+    tri2.b = v1 + offset;
+    tri2.c = v2 + offset;
+    list.push_back(tri1);
+    list.push_back(tri2);
+}
+
 void Model::populateRenderBuffers(DgRenderDevice renderDevice) {
     auto indexProp = OpenMesh::getOrMakeProperty<PolyMesh::VertexHandle, int>(renderMesh, "index");
     int index = 0;
@@ -242,13 +285,66 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice) {
     for(auto vh : originalMesh.edges()) {
         linesSize++;
     }
-    std::vector<RenderLine> lines;
+    linesSize *= 12;
+    
+    std::vector<RenderVertex> wfVerts;
+    wfVerts.reserve(vertsSize * 8);
+    int wfVertIndex = 0;
+    
+    std::vector<RenderTriange> lines;
     lines.reserve(linesSize);
     for(auto eh : originalMesh.edges()) {
-        RenderLine line;
-        line.a = indexProp[originalToRenderVerts[eh.v0()]];
-        line.b = indexProp[originalToRenderVerts[eh.v1()]];
-        lines.push_back(line);
+        glm::vec3 pos1 = vec3FromPoint(originalMesh.point(eh.v0()));
+        glm::vec3 pos2 = vec3FromPoint(originalMesh.point(eh.v1()));
+        glm::vec3 normal1 = vec3FromPoint(originalMesh.normal(eh.v0()));
+        glm::vec3 normal2 = vec3FromPoint(originalMesh.normal(eh.v1()));
+        RenderTriange line;
+        float thickness = 0.025f;
+        RenderVertex v1;
+        v1.normal = glm::cross(glm::normalize(pos2 - pos1), normal1);
+        v1.pos = pos1 + v1.normal * thickness;
+        wfVerts.push_back(v1);
+        RenderVertex v2;
+        v2.normal = v1.normal;
+        v2.pos = pos2 + v2.normal * thickness;
+        wfVerts.push_back(v2);
+        RenderVertex v3;
+        v3.normal = -v1.normal;
+        v3.pos = pos1 + v3.normal * thickness;
+        wfVerts.push_back(v3);
+        RenderVertex v4;
+        v4.normal = -v2.normal;
+        v4.pos = pos2 + v4.normal * thickness;
+        wfVerts.push_back(v4);
+        RenderVertex v5 = v1;
+        v5.pos += normal1 * thickness * 2.0f;
+        wfVerts.push_back(v5);
+        RenderVertex v6 = v2;
+        v6.pos += normal2 * thickness * 2.0f;
+        wfVerts.push_back(v6);
+        RenderVertex v7 = v3;
+        v7.pos += normal1 * thickness * 2.0f;
+        wfVerts.push_back(v7);
+        RenderVertex v8 = v4;
+        v8.pos += normal2 * thickness * 2.0f;
+        wfVerts.push_back(v8);
+        
+        /*
+          4___________5
+          |\           \
+          | 0 ----__-- 1
+          6 |   _-   7 |
+           \2 --______ 3
+         */
+        
+        addQuad(lines, wfVertIndex, 0, 1, 3, 2); // back
+        addQuad(lines, wfVertIndex, 6, 7, 5, 4); // front
+        addQuad(lines, wfVertIndex, 4, 5, 1, 0); // top
+        addQuad(lines, wfVertIndex, 3, 1, 5, 7); // right
+        addQuad(lines, wfVertIndex, 6, 7, 3, 2); // bottom
+        addQuad(lines, wfVertIndex, 4, 0, 2, 6); // left
+        
+        wfVertIndex+=8;
     }
     
     Diligent::BufferDesc VertBuffDesc;
@@ -260,6 +356,16 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice) {
     VBData.pData = verts.data();
     VBData.DataSize = verts.size() * sizeof(RenderVertex);
     renderDevice->CreateBuffer(VertBuffDesc, &VBData, &vertexBuffer);
+    
+    Diligent::BufferDesc WfVertBuffDesc;
+    WfVertBuffDesc.Name = "Wireframe Vertex buffer";
+    WfVertBuffDesc.Usage = Diligent::USAGE_IMMUTABLE;
+    WfVertBuffDesc.BindFlags = Diligent::BIND_VERTEX_BUFFER;
+    WfVertBuffDesc.Size = wfVerts.size() * sizeof(RenderVertex);
+    Diligent::BufferData WfVBData;
+    WfVBData.pData = wfVerts.data();
+    WfVBData.DataSize = wfVerts.size() * sizeof(RenderVertex);
+    renderDevice->CreateBuffer(WfVertBuffDesc, &WfVBData, &wireframeVertexBuffer);
 
     Diligent::BufferDesc TriBuffDesc;
     TriBuffDesc.Name = "Triange index buffer";
@@ -277,14 +383,14 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice) {
     LineBuffDesc.Usage = Diligent::USAGE_IMMUTABLE; 
     LineBuffDesc.BindFlags = Diligent::BIND_INDEX_BUFFER;
 //    LineBuffDesc.CPUAccessFlags = Diligent::CPU_ACCESS_FLAGS::CPU_ACCESS_WRITE;
-    LineBuffDesc.Size = lines.size() * sizeof(RenderLine);
+    LineBuffDesc.Size = lines.size() * sizeof(RenderTriange);
     Diligent::BufferData LBData;
     LBData.pData = lines.data();
-    LBData.DataSize = lines.size() * sizeof(RenderLine);
+    LBData.DataSize = lines.size() * sizeof(RenderTriange);
     renderDevice->CreateBuffer(LineBuffDesc, &LBData, &lineBuffer);
     
     numTrisIndices = trisSize * 3;
-    numLinesIndices = linesSize * 2;
+    numLinesIndices = linesSize * 3;
 }
 
 ModelRenderer::ModelRenderer(DgRenderDevice renderDevice, DgSwapChain swapChain, Texture& matcap,
@@ -404,9 +510,8 @@ ModelRenderer::ModelRenderer(DgRenderDevice renderDevice, DgSwapChain swapChain,
         PSOCreateInfo.GraphicsPipeline.SmplDesc.Count = options.sampleCount;
         PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = swapChain->GetDesc().ColorBufferFormat;
         PSOCreateInfo.GraphicsPipeline.DSVFormat = swapChain->GetDesc().DepthBufferFormat;
-        PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_LINE_LIST;
+        PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = Diligent::PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = Diligent::CULL_MODE_NONE;
-        PSOCreateInfo.GraphicsPipeline.RasterizerDesc.AntialiasedLineEnable = Diligent::True;
         PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = Diligent::True;
 
 //        Diligent::BlendStateDesc BlendState;
@@ -425,7 +530,7 @@ ModelRenderer::ModelRenderer(DgRenderDevice renderDevice, DgSwapChain swapChain,
             ShaderCI.Desc.ShaderType = Diligent::SHADER_TYPE_VERTEX;
             ShaderCI.EntryPoint = "main";
             ShaderCI.Desc.Name = "Wireframe vertex shader";
-            ShaderCI.Source = RendererVSSource;
+            ShaderCI.Source = RendererWireframeVSSource;
             renderDevice->CreateShader(ShaderCI, &pVS);
 
             Diligent::BufferDesc CBDesc;
@@ -499,7 +604,8 @@ void ModelRenderer::draw(DgDeviceContext context,
     
     RendererVSConstants VSConstants;
     VSConstants.MVP = glm::transpose(modelViewProj);
-    VSConstants.normal = glm::transpose(glm::mat3(glm::transpose(glm::inverse(glm::mat4(1.0f)))));
+//    VSConstants.MV = glm::transpose(modelView);
+    VSConstants.normal = glm::transpose(glm::mat4(1.0f));
     {
         Diligent::MapHelper<RendererVSConstants> CBConstants(context, surface.VSConsts,
             Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
@@ -514,19 +620,19 @@ void ModelRenderer::draw(DgDeviceContext context,
         Diligent::MapHelper<RendererPSConstants> CBConstants(context, surface.PSConsts,
             Diligent::MAP_WRITE, Diligent::MAP_FLAG_DISCARD);
         RendererPSConstants constants;
-        constants.modelView = modelView;
+        constants.modelView = glm::transpose(modelView);
 //        constants.eye = glm::normalize(-eye);
         *CBConstants = constants;
     }
-
-    Diligent::Uint64   offset = 0;
-    Diligent::IBuffer* pBuffs[] = { model.vertexBuffer };
-    context->SetVertexBuffers(0, 1, pBuffs, &offset,
-        Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-        Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
     
     // Surface
     {
+        Diligent::Uint64   offset = 0;
+        Diligent::IBuffer* pBuffs[] = { model.vertexBuffer };
+        context->SetVertexBuffers(0, 1, pBuffs, &offset,
+            Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+            Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
+        
         context->SetIndexBuffer(model.triangleBuffer, 0,
             Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
@@ -544,6 +650,12 @@ void ModelRenderer::draw(DgDeviceContext context,
     
     // Wireframe
     {
+        Diligent::Uint64   offset = 0;
+        Diligent::IBuffer* pBuffs[] = { model.wireframeVertexBuffer };
+        context->SetVertexBuffers(0, 1, pBuffs, &offset,
+            Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+            Diligent::SET_VERTEX_BUFFERS_FLAG_RESET);
+        
         context->SetIndexBuffer(model.lineBuffer, 0,
             Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
