@@ -252,6 +252,16 @@ int App::run()
                         mDemoType = DemoType::VECTOR_GRAPHICS;
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
                         mIsControlPressed = true;
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_S) {
+                        for(auto eh : model.originalMesh.edges()) {
+                            if(eh.selected())
+                                continue;
+                            
+                            model.originalMesh.status(eh).set_selected(true);
+                            break;
+                        }
+                        model.invalidate(mDevice, mImmediateContext);
+                    }
                 } else {
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
                         mIsControlPressed = true;
@@ -316,14 +326,23 @@ int App::run()
 //                        rayX = x;
 //                        rayY = y;
                         isMouseDown = true;
+                        isMouseMoved = false;
                     }
 				}
 				break;
             case SDL_MOUSEBUTTONUP:
                 if(currentEvent.button.button == SDL_BUTTON_LEFT) {
                     isMouseDown = false;
+                    if(mDemoType == DemoType::HALF_EDGE_3D) {
+                        if(!isMouseMoved) { // On click
+                            glm::vec2 mouse = glm::vec2(mMouseX, mMouseY);
+                            glm::vec2 screenDims = glm::vec2(mWidth, mHeight);
+                            editor->raycastEdges(mouse, screenDims, mDevice, mImmediateContext);
+                        }
+                    }
                 }
             case SDL_MOUSEMOTION:
+                isMouseMoved = true;
                 mMouseX = currentEvent.motion.x;
                 mMouseY = currentEvent.motion.y;
                 if(isMouseDown) {
@@ -1120,6 +1139,8 @@ void App::initializeResources()
     // Halfedge 3D editor
     
     model = createCubeModel();
+    model.originalMesh.status(*model.originalMesh.edges_begin()).set_selected(true);
+    model.originalMesh.status(*model.originalMesh.faces_begin()).set_selected(true);
     model.isFlatShaded = true;
     {
         int width, height, numChannels;
@@ -1133,7 +1154,7 @@ void App::initializeResources()
         stbi_image_free(imageData);
         editor = std::make_shared<Editor>(mDevice, mSwapChain, matcap, options);
         editor->model = &model;
-        model.invalidate(mDevice);
+        model.invalidate(mDevice, mImmediateContext);
     }
 }
 

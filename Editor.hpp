@@ -34,6 +34,12 @@ struct Texture {
     DgTextureView textureSRV;
 };
 
+struct Ray {
+    glm::vec3 origin, direction;
+};
+
+Ray screenPointToRay(glm::vec2 pos, glm::vec2 screenDims, glm::mat4 viewProj);
+
 struct RenderVertex {
     glm::vec3 pos;
     glm::vec3 normal;
@@ -49,8 +55,17 @@ struct RenderLine {
     int a, b;
 };
 
+struct EdgeSelectionVertex {
+    glm::vec3 pos;
+    PolyMesh::EdgeHandle eh;
+};
+
 class Model {
-    void populateRenderBuffers(DgRenderDevice renderDevice);
+    void populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext context);
+    
+    int lastNumVerts = 0;
+    int lastNumTris = 0;
+    int lastNumEdges = 0;
     
 public:
     Model();
@@ -58,15 +73,18 @@ public:
     PolyMesh originalMesh;
     PolyMesh renderMesh;
     
+    std::vector<EdgeSelectionVertex> selectionWireframeVerts;
+    std::vector<RenderTriange> selectionWireframeTris;
+    
     std::unordered_map<PolyMesh::VertexHandle, PolyMesh::VertexHandle> originalToRenderVerts;
     
     bool isFlatShaded = true;
     
-    DgBuffer vertexBuffer, triangleBuffer, lineBuffer, wireframeVertexBuffer;
+    DgBuffer vertexBuffer, triangleBuffer, wireframeTriangleBuffer, wireframeVertexBuffer;
     int numTrisIndices = 0;
     int numLinesIndices = 0;
     
-    void invalidate(DgRenderDevice renderDevice);
+    void invalidate(DgRenderDevice renderDevice, DgDeviceContext context);
 };
 
 Model createCubeModel();
@@ -109,6 +127,9 @@ public:
     DgRenderDevice renderDevice;
     ModelRenderer renderer;
     
+    void raycastEdges(glm::vec2 mouse, glm::vec2 screenDims,
+                      DgRenderDevice renderDevice, DgDeviceContext context);
+    
     Model* model = nullptr;
     
     void input(bool isMouseDown, float mouseX, float mouseY);
@@ -147,7 +168,7 @@ struct PSOutput
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
-    PSOut.Color = float4(0.05f, 0.05f, 0.05f, 1.0f);
+    PSOut.Color = PSIn.Color;
 }
 )";
 
@@ -196,7 +217,13 @@ void main(in  PSInput  PSIn,
     float3 no = PSIn.Normal / 2.0 + 0.5;
     float3 eye = normalize(float3(mul(PSIn.Pos, g_ModelView)));
     float3 base = g_Texture.Sample(g_Texture_sampler, matcap2(PSIn.Normal)).rgb;
-    PSOut.Color = float4(base, 1.0);
+    float4 col = PSIn.Color;
+    if(col.g < 0.005) {
+        col = float4(1.0, 0.5, 0.0, 1.0);
+    } else {
+        col = float4(1.0, 1.0, 1.0, 1.0);
+    }
+    PSOut.Color = float4(base, 1.0) * col;
     // PSOut.Color = float4(-float3(mul(float4(normalize(-PSIn.Normal), 1.0), g_ModelView)), 1.0);
     // PSOut.Color = g_Texture.Sample(g_Texture_sampler, float2(PSIn.Pos.x / 1280.0, PSIn.Pos.y / 720.0));
     // float4(no.x, no.y, no.z, 1.0f);
@@ -214,8 +241,8 @@ struct VSInput
 {
     float3 Pos      : ATTRIB0;
     float3 Normal   : ATTRIB1;
-    float2 TexCoord : ATTRIB3;
-    float4 Color    : ATTRIB2;
+    float2 TexCoord : ATTRIB2;
+    float4 Color    : ATTRIB3;
 };
 
 struct PSInput
@@ -247,8 +274,8 @@ struct VSInput
 {
     float3 Pos      : ATTRIB0;
     float3 Normal   : ATTRIB1;
-    float2 TexCoord : ATTRIB3;
-    float4 Color    : ATTRIB2;
+    float2 TexCoord : ATTRIB2;
+    float4 Color    : ATTRIB3;
 };
 
 struct PSInput

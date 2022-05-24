@@ -138,6 +138,7 @@ public:
     
     Shape mRayStroke;
     bool isMouseDown = false;
+    bool isMouseMoved = false;
     
     std::shared_ptr<Shape> mSquircleShape;
     
