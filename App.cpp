@@ -250,8 +250,11 @@ int App::run()
                 } else if(mDemoType == DemoType::HALF_EDGE_3D) {
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
                         mDemoType = DemoType::VECTOR_GRAPHICS;
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL) {
                         mIsControlPressed = true;
+                    }
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LSHIFT)
+                        editor->isShiftPressed = true;
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_S) {
                         for(auto eh : model.originalMesh.edges()) {
                             if(eh.selected())
@@ -262,6 +265,79 @@ int App::run()
                         }
                         model.invalidate(mDevice, mImmediateContext);
                     }
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_C) {
+                        for(auto vh : model.originalMesh.vertices())
+                            model.originalMesh.status(vh).set_selected(false);
+                        for(auto heh : model.originalMesh.halfedges())
+                            model.originalMesh.status(heh).set_selected(false);
+                        for(auto eh : model.originalMesh.edges()) {
+                            if(eh.selected()) {
+                                model.originalMesh.status(eh.v0()).set_selected(true);
+                                model.originalMesh.status(eh.v1()).set_selected(true);
+                            }
+                        }
+                        PolyMesh::Point normal;
+                        int numVerts = 0;
+                        for(auto vh : model.originalMesh.vertices()) {
+                            if(vh.selected()) {
+                                normal += model.originalMesh.normal(vh);
+                                numVerts++;
+                            }
+                        }
+                        normal /= numVerts;
+                        
+//                        loopCut(model.originalMesh, false);
+                        extrude(model.originalMesh);
+                        model.originalMesh.garbage_collection();
+                        
+                        for(auto vh : model.originalMesh.vertices()) {
+                            if(vh.selected()) {
+//                                 model.originalMesh.set_point(vh, model.originalMesh.point(vh) + normal.normalize());
+                                model.originalMesh.set_point(vh, model.originalMesh.point(vh) +
+                                                             PolyMesh::Point(0.0f, 1.0f, 0.0f));
+                            }
+                        }
+                        model.originalMesh.update_normals();
+                        for(auto heh : model.originalMesh.halfedges()) {
+                            if(heh.selected())
+                                model.originalMesh.status(heh.edge()).set_selected(true);
+                        }
+                        
+//                        mesh = model.originalMesh;
+//                        for(auto vh : model.originalMesh.vertices()) {
+//                            model.originalMesh.set_point(vh, model.originalMesh.point(vh) * 20.0f);
+//                        }
+                        
+                        model.invalidate(mDevice, mImmediateContext);
+                    }
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_B) {
+                        for(auto vh : model.originalMesh.vertices())
+                            model.originalMesh.status(vh).set_selected(false);
+                        for(auto heh : model.originalMesh.halfedges())
+                            model.originalMesh.status(heh).set_selected(false);
+                        for(auto eh : model.originalMesh.edges()) {
+                            if(eh.selected()) {
+                                model.originalMesh.status(eh.v0()).set_selected(true);
+                                model.originalMesh.status(eh.v1()).set_selected(true);
+                            }
+                        }
+                        bevel(model.originalMesh, 3, 0.25f);
+                        model.originalMesh.garbage_collection();
+                        model.originalMesh.update_normals();
+                        for(auto heh : model.originalMesh.halfedges()) {
+                            if(heh.selected())
+                                model.originalMesh.status(heh.edge()).set_selected(true);
+                        }
+                        model.invalidate(mDevice, mImmediateContext);
+                    }
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_Z) {
+                        OpenMesh::Subdivider::Uniform::CatmullClarkT<PolyMesh> subdiv;
+                        subdiv.attach(model.originalMesh);
+                        subdiv(1);
+                        subdiv.detach();
+                        model.invalidate(mDevice, mImmediateContext);
+                    }
+                        
                 } else {
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LCTRL)
                         mIsControlPressed = true;
@@ -300,6 +376,10 @@ int App::run()
                     
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_S)
                         meshViewer.currentTransform = CurrentTransform::None;
+                }
+                else if(mDemoType == DemoType::HALF_EDGE_3D) {
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_LSHIFT)
+                        editor->isShiftPressed = false;
                 }
                 break;
 			case SDL_WINDOWEVENT:

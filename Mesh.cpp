@@ -380,7 +380,24 @@ void extrude(PolyMesh& mesh, bool debug) {
                 edgeBottomOrigin, edgeBottomEnd, edgeTopEnd, edgeTopOrigin
     //            edgeTopOrigin, edgeTopEnd, edgeBottomEnd, edgeBottomOrigin
             };
-            mesh.add_face(faceVerts);
+            PolyMesh::FaceHandle face = mesh.add_face(faceVerts);
+            mesh.calc_normal(face);
+        }
+    }
+    
+    // Calculate vertex normals
+    for (auto bound : selectBounds) {
+        for(PolyMesh::HalfedgeHandle heh : bound) {
+            PolyMesh::VertexHandle edgeBottomOrigin = mesh.from_vertex_handle(heh);
+            PolyMesh::VertexHandle edgeBottomEnd = mesh.to_vertex_handle(heh);
+            PolyMesh::VertexHandle edgeTopOrigin = top.originalCopyPairs[edgeBottomOrigin];
+            PolyMesh::VertexHandle edgeTopEnd = top.originalCopyPairs[edgeBottomEnd];
+            if(mesh.is_boundary(edgeBottomOrigin)) {
+                mesh.calc_normal(edgeBottomOrigin);
+                mesh.calc_normal(edgeTopOrigin);
+            }
+            mesh.calc_normal(edgeBottomEnd);
+            mesh.calc_normal(edgeTopEnd);
         }
     }
     
@@ -500,13 +517,6 @@ void loopCut(PolyMesh& mesh, bool debug) {
     std::vector<PolyMesh::VertexHandle> A, B, C;
     
     for (auto he : ring) {
-        PolyMesh::FaceHandle face = mesh.face_handle(he);
-        if(face != PolyMesh::InvalidFaceHandle) {
-            mesh.delete_face(face, false);
-        }
-    }
-    
-    for (auto he : ring) {
         PolyMesh::VertexHandle from = mesh.from_vertex_handle(he);
         PolyMesh::VertexHandle to = mesh.to_vertex_handle(he);
         PolyMesh::Point mean = (mesh.point(from) + mesh.point(to)) / 2.0f;
@@ -514,6 +524,19 @@ void loopCut(PolyMesh& mesh, bool debug) {
         B.push_back(mesh.add_vertex(mean));
         C.push_back(to);
     }
+    // To connect start with end
+    A.push_back(A.front());
+    B.push_back(B.front());
+    C.push_back(C.front());
+    
+    for (auto he : ring) {
+        PolyMesh::FaceHandle face = mesh.face_handle(he);
+        if(face != PolyMesh::InvalidFaceHandle) {
+            mesh.delete_face(face, false);
+        }
+    }
+    
+//    return;
     
     for(int i = 0; i < A.size() - 1; i++) {
         /*
@@ -521,12 +544,12 @@ void loopCut(PolyMesh& mesh, bool debug) {
              |    |    |
             a2 - b2 - c2
          */
-        PolyMesh::VertexHandle a1 = A[i];
-        PolyMesh::VertexHandle a2 = A[i + 1];
-        PolyMesh::VertexHandle b1 = B[i];
-        PolyMesh::VertexHandle b2 = B[i + 1];
-        PolyMesh::VertexHandle c1 = C[i];
-        PolyMesh::VertexHandle c2 = C[i + 1];
+        PolyMesh::VertexHandle a1 = A.at(i);
+        PolyMesh::VertexHandle a2 = A.at(i + 1);
+        PolyMesh::VertexHandle b1 = B.at(i);
+        PolyMesh::VertexHandle b2 = B.at(i + 1);
+        PolyMesh::VertexHandle c1 = C.at(i);
+        PolyMesh::VertexHandle c2 = C.at(i + 1);
         std::vector<PolyMesh::VertexHandle> face;
         face = {
             a1, b1, b2, a2

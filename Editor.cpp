@@ -191,6 +191,7 @@ Model createCubeModel() {
 }
 
 void Model::invalidate(DgRenderDevice renderDevice, DgDeviceContext context) {
+    originalToRenderVerts.clear();
     if(!isFlatShaded) {
         renderMesh = originalMesh;
         auto rvhIt = renderMesh.vertices_begin();
@@ -263,7 +264,7 @@ void addQuad(std::vector<RenderTriange>& list, int offset, int v0, int v1, int v
 }
 
 void makeWireframe(std::vector<RenderVertex>& verts, std::vector<RenderTriange>& tris,
-                   PolyMesh& originalMesh, float thickness = 0.025f,
+                   PolyMesh& originalMesh, float thickness = 0.02f,
                    std::vector<PolyMesh::EdgeHandle>* vertsEdges = nullptr) {
     int trisSize = 0;
     for(auto eh : originalMesh.edges()) {
@@ -272,11 +273,12 @@ void makeWireframe(std::vector<RenderVertex>& verts, std::vector<RenderTriange>&
     trisSize *= 12;
     
     int vertsSize = 0;
-    for(auto vh : originalMesh.vertices()) {
-        vertsSize++;
+    for(auto eh : originalMesh.edges()) {
+        vertsSize += 2;
     }
+    vertsSize *= 8;
     
-    verts.reserve(vertsSize * 8);
+    verts.reserve(vertsSize);
     if(vertsEdges != nullptr)
         vertsEdges->reserve(verts.size());
     int vertIndex = 0;
@@ -288,8 +290,11 @@ void makeWireframe(std::vector<RenderVertex>& verts, std::vector<RenderTriange>&
             glm::vec4(0.05f, 0.05f, 0.05f, 1.0f);
         glm::vec3 pos1 = vec3FromPoint(originalMesh.point(eh.v0()));
         glm::vec3 pos2 = vec3FromPoint(originalMesh.point(eh.v1()));
-        glm::vec3 normal1 = vec3FromPoint(originalMesh.normal(eh.v0()));
-        glm::vec3 normal2 = vec3FromPoint(originalMesh.normal(eh.v1()));
+        // Fix edges overlapping at corners
+        pos1 += glm::normalize(pos2 - pos1) * 0.012f;
+        pos2 += glm::normalize(pos1 - pos2) * 0.012f;
+        glm::vec3 normal1 = glm::normalize(vec3FromPoint(originalMesh.normal(eh.v0())));
+        glm::vec3 normal2 = glm::normalize(vec3FromPoint(originalMesh.normal(eh.v1())));
         RenderTriange line;
         RenderVertex v1;
         v1.normal = glm::cross(glm::normalize(pos2 - pos1), normal1);
@@ -393,7 +398,7 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext c
         for(auto fvh : renderMesh.fv_cw_range(fh)) {
             int vInd = indexProp[fvh];
             if(isSelected) {
-                verts[vInd].color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+                verts.at(vInd).color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
             }
             switch(fvInd) {
                 case 0:
@@ -426,7 +431,7 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext c
     selectionWireframeVerts.clear();
     selectionWireframeTris.clear();
     makeWireframe(selWfRenderVerts, selectionWireframeTris, originalMesh,
-                  0.05f, &selWfRenderVertsEdges);
+                  0.1f, &selWfRenderVertsEdges);
     
     selectionWireframeVerts.reserve(selWfRenderVerts.size() + vertsSize);
     for(auto i = 0; i <  selWfRenderVerts.size(); i++) {
@@ -455,7 +460,7 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext c
     }
         
     if(vertsSize != lastNumVerts || trisSize != lastNumTris ||
-       edgesSize != lastNumEdges) {
+       wfVerts.size() != lastNumWireframeVerts) {
         
         vertexBuffer.Release();
         Diligent::BufferDesc VertBuffDesc;
@@ -481,8 +486,6 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext c
         renderDevice->CreateBuffer(TriBuffDesc, &TBData, &triangleBuffer);
 
         wireframeVertexBuffer.Release();
-        wireframeTriangleBuffer.Release();
-        
         Diligent::BufferDesc WfVertBuffDesc;
         WfVertBuffDesc.Name = "Wireframe vertex buffer";
         WfVertBuffDesc.Usage = Diligent::USAGE_DEFAULT;
@@ -493,6 +496,7 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext c
         WfVBData.DataSize = wfVerts.size() * sizeof(RenderVertex);
         renderDevice->CreateBuffer(WfVertBuffDesc, &WfVBData, &wireframeVertexBuffer);
         
+        wireframeTriangleBuffer.Release();
         Diligent::BufferDesc LineBuffDesc;
         LineBuffDesc.Name = "Wireframe triangle index buffer";
         LineBuffDesc.Usage = Diligent::USAGE_DEFAULT;
@@ -529,7 +533,7 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext c
     
     lastNumVerts = vertsSize;
     lastNumTris = trisSize;
-    lastNumEdges = edgesSize;
+    lastNumWireframeVerts = wfVerts.size();
 }
 
 ModelRenderer::ModelRenderer(DgRenderDevice renderDevice, DgSwapChain swapChain, Texture& matcap,
@@ -890,8 +894,28 @@ void Editor::raycastEdges(glm::vec2 mouse, glm::vec2 screenDims,
     }
     if(closestVert != nullptr) {
         if(closestVert->eh != PolyMesh::InvalidEdgeHandle) {
-            model->originalMesh.status(closestVert->eh).set_selected(true);
+            if(!isShiftPressed) {
+                for(auto eh : model->originalMesh.edges())
+                    model->originalMesh.status(eh).set_selected(false);
+            }
+            PolyMesh::StatusInfo& edgeStatus = model->originalMesh.status(closestVert->eh);
+            if(edgeStatus.selected())
+                edgeStatus.set_selected(false);
+            else
+                edgeStatus.set_selected(true);
             model->invalidate(renderDevice, context);
+        }
+    } else {
+        if(!isShiftPressed) {
+            bool doInvalidate = false;
+            for(auto eh : model->originalMesh.edges()) {
+                if(eh.selected()) {
+                    doInvalidate = true;
+                    model->originalMesh.status(eh).set_selected(false);
+                }
+            }
+            if(doInvalidate)
+                model->invalidate(renderDevice, context);
         }
     }
 }

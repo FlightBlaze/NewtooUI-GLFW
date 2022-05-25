@@ -65,7 +65,7 @@ class Model {
     
     int lastNumVerts = 0;
     int lastNumTris = 0;
-    int lastNumEdges = 0;
+    int lastNumWireframeVerts = 0;
     
 public:
     Model();
@@ -126,6 +126,8 @@ public:
     Texture matcap;
     DgRenderDevice renderDevice;
     ModelRenderer renderer;
+    
+    bool isShiftPressed = false;
     
     void raycastEdges(glm::vec2 mouse, glm::vec2 screenDims,
                       DgRenderDevice renderDevice, DgDeviceContext context);
