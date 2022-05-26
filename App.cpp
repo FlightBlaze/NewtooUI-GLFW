@@ -265,7 +265,7 @@ int App::run()
                         }
                         model.invalidate(mDevice, mImmediateContext);
                     }
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_C) {
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_E) {
                         for(auto vh : model.originalMesh.vertices())
                             model.originalMesh.status(vh).set_selected(false);
                         for(auto heh : model.originalMesh.halfedges())
@@ -276,15 +276,24 @@ int App::run()
                                 model.originalMesh.status(eh.v1()).set_selected(true);
                             }
                         }
-                        PolyMesh::Point normal;
-                        int numVerts = 0;
-                        for(auto vh : model.originalMesh.vertices()) {
-                            if(vh.selected()) {
-                                normal += model.originalMesh.normal(vh);
-                                numVerts++;
+                        model.originalMesh.update_normals();
+                        glm::vec3 normal = glm::vec3(0);
+                        int numVertsOrFaces = 0;
+                        auto selFaces = getSelectedFaces(model.originalMesh);
+                        if(selFaces.size() == 0) {
+                            for(auto vh : model.originalMesh.vertices()) {
+                                if(vh.selected()) {
+                                    normal += vec3FromPoint(model.originalMesh.normal(vh));
+                                    numVertsOrFaces++;
+                                }
+                            }
+                        } else {
+                            for(auto fh : selFaces) {
+                                normal += vec3FromPoint(model.originalMesh.normal(fh));
+                                numVertsOrFaces++;
                             }
                         }
-                        normal /= numVerts;
+                        normal /= numVertsOrFaces;
                         
 //                        loopCut(model.originalMesh, false);
                         extrude(model.originalMesh);
@@ -292,9 +301,9 @@ int App::run()
                         
                         for(auto vh : model.originalMesh.vertices()) {
                             if(vh.selected()) {
-//                                 model.originalMesh.set_point(vh, model.originalMesh.point(vh) + normal.normalize());
-                                model.originalMesh.set_point(vh, model.originalMesh.point(vh) +
-                                                             PolyMesh::Point(0.0f, 1.0f, 0.0f));
+                                 model.originalMesh.set_point(vh, model.originalMesh.point(vh) + vec3ToPoint(normal));
+//                                model.originalMesh.set_point(vh, model.originalMesh.point(vh) +
+//                                                             PolyMesh::Point(0.0f, 1.0f, 0.0f));
                             }
                         }
                         model.originalMesh.update_normals();
@@ -308,7 +317,28 @@ int App::run()
 //                            model.originalMesh.set_point(vh, model.originalMesh.point(vh) * 20.0f);
 //                        }
                         
-                        model.invalidate(mDevice, mImmediateContext);
+                        model.invalidate(mDevice, mImmediateContext, editor->wireframeThickness);
+                    }
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_L) {
+                        for(auto vh : model.originalMesh.vertices())
+                            model.originalMesh.status(vh).set_selected(false);
+                        for(auto heh : model.originalMesh.halfedges())
+                            model.originalMesh.status(heh).set_selected(false);
+                        for(auto eh : model.originalMesh.edges()) {
+                            if(eh.selected()) {
+                                model.originalMesh.status(eh.v0()).set_selected(true);
+                                model.originalMesh.status(eh.v1()).set_selected(true);
+                            }
+                        }
+                        model.originalMesh.update_normals();
+                        loopCut(model.originalMesh, false);
+                        model.originalMesh.garbage_collection();
+                        model.originalMesh.update_normals();
+                        for(auto heh : model.originalMesh.halfedges()) {
+                            if(heh.selected())
+                                model.originalMesh.status(heh.edge()).set_selected(true);
+                        }
+                        model.invalidate(mDevice, mImmediateContext, editor->wireframeThickness);
                     }
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_B) {
                         for(auto vh : model.originalMesh.vertices())
@@ -335,7 +365,7 @@ int App::run()
                         subdiv.attach(model.originalMesh);
                         subdiv(1);
                         subdiv.detach();
-                        model.invalidate(mDevice, mImmediateContext);
+                        model.invalidate(mDevice, mImmediateContext, editor->wireframeThickness);
                     }
                         
                 } else {
@@ -417,7 +447,7 @@ int App::run()
                         if(!isMouseMoved) { // On click
                             glm::vec2 mouse = glm::vec2(mMouseX, mMouseY);
                             glm::vec2 screenDims = glm::vec2(mWidth, mHeight);
-                            editor->raycastEdges(mouse, screenDims, mDevice, mImmediateContext);
+                            editor->raycastEdges(mouse, screenDims, mImmediateContext);
                         }
                     }
                 }
@@ -664,9 +694,20 @@ void App::draw()
         break;
     case DemoType::HALF_EDGE_3D:
     {
+        editor->eye = eye;
+        editor->measureDistance();
+        editor->recreateWireframeIfNeed(mImmediateContext);
+        
+//        bvg::Color primaryColor = bvg::Color(0.0f, 0.1f, 1.0f);
+//        bvgCtx.fillStyle = bvg::SolidColor(primaryColor);
+//        bvgCtx.fontSize = 16.0f;
+//        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+//        std::wstring distanceStr = L"Distance: " +
+//            converter.from_bytes(std::to_string(roundedDistance).c_str());
+//        bvgCtx.print(distanceStr, 10, 40);
+        
         editor->viewProj = vp;
         editor->view = view;
-        editor->eye = eye;
         editor->draw(mImmediateContext);
     }
         break;

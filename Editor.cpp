@@ -190,7 +190,7 @@ Model createCubeModel() {
     return model;
 }
 
-void Model::invalidate(DgRenderDevice renderDevice, DgDeviceContext context) {
+void Model::invalidate(DgRenderDevice renderDevice, DgDeviceContext context, float wireframeThickness) {
     originalToRenderVerts.clear();
     if(!isFlatShaded) {
         renderMesh = originalMesh;
@@ -210,7 +210,7 @@ void Model::invalidate(DgRenderDevice renderDevice, DgDeviceContext context) {
         renderMesh.request_edge_status();
         for(auto fh : originalMesh.faces()) {
             std::vector<PolyMesh::VertexHandle> faceVerts;
-            for(auto vhOriginal : originalMesh.fv_cw_range(fh)) {
+            for(auto vhOriginal : originalMesh.fv_ccw_range(fh)) {
                 PolyMesh::VertexHandle vhRender = renderMesh.add_vertex(originalMesh.point(vhOriginal));
                 renderMesh.set_normal(vhRender, originalMesh.normal(vhOriginal));
                 renderMesh.set_texcoord2D(vhRender, originalMesh.texcoord2D(vhOriginal));
@@ -229,12 +229,16 @@ void Model::invalidate(DgRenderDevice renderDevice, DgDeviceContext context) {
     renderMesh.triangulate();
     
     if(renderDevice != nullptr) {
-        populateRenderBuffers(renderDevice, context);
+        populateRenderBuffers(renderDevice, context, wireframeThickness);
     }
 }
 
 glm::vec3 vec3FromPoint(PolyMesh::Point p) {
     return glm::vec3(p[0], p[1], p[2]);
+}
+
+PolyMesh::Point vec3ToPoint(glm::vec3 v) {
+    return PolyMesh::Point(v.x, v.y, v.z);
 }
 
 glm::vec2 vec2FromTexCoord2D(PolyMesh::TexCoord2D co) {
@@ -291,8 +295,8 @@ void makeWireframe(std::vector<RenderVertex>& verts, std::vector<RenderTriange>&
         glm::vec3 pos1 = vec3FromPoint(originalMesh.point(eh.v0()));
         glm::vec3 pos2 = vec3FromPoint(originalMesh.point(eh.v1()));
         // Fix edges overlapping at corners
-        pos1 += glm::normalize(pos2 - pos1) * 0.012f;
-        pos2 += glm::normalize(pos1 - pos2) * 0.012f;
+        pos1 += glm::normalize(pos2 - pos1) * thickness / 2.0f;
+        pos2 += glm::normalize(pos1 - pos2) * thickness / 2.0f;
         glm::vec3 normal1 = glm::normalize(vec3FromPoint(originalMesh.normal(eh.v0())));
         glm::vec3 normal2 = glm::normalize(vec3FromPoint(originalMesh.normal(eh.v1())));
         RenderTriange line;
@@ -364,7 +368,8 @@ void makeWireframe(std::vector<RenderVertex>& verts, std::vector<RenderTriange>&
     }
 }
 
-void Model::populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext context) {
+void Model::populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext context,
+                                  float wireframeThickness) {
     auto indexProp = OpenMesh::getOrMakeProperty<PolyMesh::VertexHandle, int>(renderMesh, "index");
     int index = 0;
     for(auto vh : renderMesh.vertices()) {
@@ -416,51 +421,10 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext c
         tris.push_back(tri);
     }
     
-    int edgesSize = 0;
-    for(auto eh : renderMesh.edges()) {
-        edgesSize++;
-    }
-    
-    std::vector<RenderVertex> wfVerts;
-    std::vector<RenderTriange> wfTris;
-    makeWireframe(wfVerts, wfTris, originalMesh);
-    
-    // Selection wireframe for raycasting
-    std::vector<RenderVertex> selWfRenderVerts;
-    std::vector<PolyMesh::EdgeHandle> selWfRenderVertsEdges;
-    selectionWireframeVerts.clear();
-    selectionWireframeTris.clear();
-    makeWireframe(selWfRenderVerts, selectionWireframeTris, originalMesh,
-                  0.1f, &selWfRenderVertsEdges);
-    
-    selectionWireframeVerts.reserve(selWfRenderVerts.size() + vertsSize);
-    for(auto i = 0; i <  selWfRenderVerts.size(); i++) {
-        RenderVertex& renderVert = selWfRenderVerts.at(i);
-        PolyMesh::EdgeHandle edge = selWfRenderVertsEdges.at(i);
-        EdgeSelectionVertex selVert;
-        selVert.pos = renderVert.pos;
-        selVert.eh = edge;
-        selectionWireframeVerts.push_back(selVert);
-    }
-    int surfaceIndicesOffset = selWfRenderVerts.size();
-    for(auto i = 0; i < verts.size(); i++) {
-        RenderVertex& renderVert = verts.at(i);
-        EdgeSelectionVertex selVert;
-        selVert.pos = renderVert.pos;
-        selVert.eh = PolyMesh::InvalidEdgeHandle;
-        selectionWireframeVerts.push_back(selVert);
-    }
-    selectionWireframeTris.reserve(trisSize);
-    for(auto i = 0; i < tris.size(); i++) {
-        RenderTriange tri = tris.at(i);
-        tri.a += surfaceIndicesOffset;
-        tri.b += surfaceIndicesOffset;
-        tri.c += surfaceIndicesOffset;
-        selectionWireframeTris.push_back(tri);
-    }
+    surfaceVertices = verts;
+    surfaceTrianges = tris;
         
-    if(vertsSize != lastNumVerts || trisSize != lastNumTris ||
-       wfVerts.size() != lastNumWireframeVerts) {
+    if(vertsSize != lastNumVerts || trisSize != lastNumTris) {
         
         vertexBuffer.Release();
         Diligent::BufferDesc VertBuffDesc;
@@ -484,7 +448,68 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext c
         TBData.pData = tris.data();
         TBData.DataSize = tris.size() * sizeof(RenderTriange);
         renderDevice->CreateBuffer(TriBuffDesc, &TBData, &triangleBuffer);
+    } else {
+        context->UpdateBuffer(vertexBuffer, 0,
+                              verts.size() * sizeof(RenderVertex),
+                              verts.data(),
+                              Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+        
+        context->UpdateBuffer(triangleBuffer, 0,
+                              tris.size() * sizeof(RenderTriange),
+                              tris.data(),
+                              Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    }
+        
+    numTrisIndices = trisSize * 3;
+    
+    lastNumVerts = vertsSize;
+    lastNumTris = trisSize;
+    
+    recreateWireframe(renderDevice, context, wireframeThickness);
+}
 
+void Model::recreateWireframe(DgRenderDevice renderDevice, DgDeviceContext context,
+                              float wireframeThickness) {
+    std::vector<RenderVertex> wfVerts;
+    std::vector<RenderTriange> wfTris;
+    makeWireframe(wfVerts, wfTris, originalMesh, wireframeThickness);
+    
+    // Selection wireframe for raycasting
+    std::vector<RenderVertex> selWfRenderVerts;
+    std::vector<PolyMesh::EdgeHandle> selWfRenderVertsEdges;
+    selectionWireframeVerts.clear();
+    selectionWireframeTris.clear();
+    makeWireframe(selWfRenderVerts, selectionWireframeTris, originalMesh,
+                  wireframeThickness * 5.0f, &selWfRenderVertsEdges);
+    
+    selectionWireframeVerts.reserve(selWfRenderVerts.size() + surfaceVertices.size());
+    for(auto i = 0; i <  selWfRenderVerts.size(); i++) {
+        RenderVertex& renderVert = selWfRenderVerts.at(i);
+        PolyMesh::EdgeHandle edge = selWfRenderVertsEdges.at(i);
+        EdgeSelectionVertex selVert;
+        selVert.pos = renderVert.pos;
+        selVert.eh = edge;
+        selectionWireframeVerts.push_back(selVert);
+    }
+    int surfaceIndicesOffset = selWfRenderVerts.size();
+    for(auto i = 0; i < surfaceVertices.size(); i++) {
+        RenderVertex& renderVert = surfaceVertices.at(i);
+        EdgeSelectionVertex selVert;
+        selVert.pos = renderVert.pos;
+        selVert.eh = PolyMesh::InvalidEdgeHandle;
+        selectionWireframeVerts.push_back(selVert);
+    }
+    selectionWireframeTris.reserve(surfaceTrianges.size());
+    for(auto i = 0; i < surfaceTrianges.size(); i++) {
+        RenderTriange tri = surfaceTrianges.at(i);
+        tri.a += surfaceIndicesOffset;
+        tri.b += surfaceIndicesOffset;
+        tri.c += surfaceIndicesOffset;
+        selectionWireframeTris.push_back(tri);
+    }
+    
+    if(wfVerts.size() != lastNumWireframeVerts) {
+        
         wireframeVertexBuffer.Release();
         Diligent::BufferDesc WfVertBuffDesc;
         WfVertBuffDesc.Name = "Wireframe vertex buffer";
@@ -507,16 +532,6 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext c
         LBData.DataSize = wfTris.size() * sizeof(RenderTriange);
         renderDevice->CreateBuffer(LineBuffDesc, &LBData, &wireframeTriangleBuffer);
     } else {
-        context->UpdateBuffer(vertexBuffer, 0,
-                              verts.size() * sizeof(RenderVertex),
-                              verts.data(),
-                              Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        
-        context->UpdateBuffer(triangleBuffer, 0,
-                              tris.size() * sizeof(RenderTriange),
-                              tris.data(),
-                              Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-        
         context->UpdateBuffer(wireframeVertexBuffer, 0,
                               wfVerts.size() * sizeof(RenderVertex),
                               wfVerts.data(),
@@ -528,11 +543,8 @@ void Model::populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext c
                               Diligent::RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     }
         
-    numTrisIndices = trisSize * 3;
     numLinesIndices = wfTris.size() * 3;
     
-    lastNumVerts = vertsSize;
-    lastNumTris = trisSize;
     lastNumWireframeVerts = wfVerts.size();
 }
 
@@ -815,6 +827,39 @@ void ModelRenderer::draw(DgDeviceContext context,
     }
 }
 
+void Editor::measureDistance() {
+    if(model == nullptr)
+        return;
+    
+    PolyMesh& mesh = model->originalMesh;
+    float minDistance = 100000.0f;
+    for(auto vh : mesh.vertices()) {
+        float distance = glm::distance(eye, vec3FromPoint(mesh.point(vh)));
+        if(distance < minDistance)
+            minDistance = distance;
+    }
+    modelNearestPointDistance = minDistance;
+}
+
+void Editor::recreateWireframeIfNeed(DgDeviceContext context) {
+    if(model == nullptr)
+        return;
+    
+    float roundedDistance = modelNearestPointDistance;
+    roundedDistance -= fmod(roundedDistance, 5.0f);
+    if(roundedDistance == 0)
+        roundedDistance = roundf(modelNearestPointDistance);
+    float thickness = fmax(roundedDistance * 0.002f, 0.002f * 1.0f);
+    wireframeThickness = thickness;
+    if(wireframeThickness != lastWireframeThickness)
+        model->recreateWireframe(renderDevice, context, wireframeThickness);
+    lastWireframeThickness = wireframeThickness;
+}
+
+void Editor::invalidateModel(DgDeviceContext context) {
+    model->invalidate(renderDevice, context, wireframeThickness);
+}
+
 // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
 bool rayTriangleIntersect(
     const glm::vec3 &orig, const glm::vec3 &dir,
@@ -871,8 +916,7 @@ bool rayTriangleIntersect(
     return true;  //this ray hits the triangle
 }
 
-void Editor::raycastEdges(glm::vec2 mouse, glm::vec2 screenDims,
-                          DgRenderDevice renderDevice, DgDeviceContext context) {
+void Editor::raycastEdges(glm::vec2 mouse, glm::vec2 screenDims, DgDeviceContext context) {
     Ray ray = screenPointToRay(mouse, screenDims, viewProj);
     if(model == nullptr)
         return;
@@ -903,7 +947,7 @@ void Editor::raycastEdges(glm::vec2 mouse, glm::vec2 screenDims,
                 edgeStatus.set_selected(false);
             else
                 edgeStatus.set_selected(true);
-            model->invalidate(renderDevice, context);
+            invalidateModel(context);
         }
     } else {
         if(!isShiftPressed) {
@@ -915,7 +959,7 @@ void Editor::raycastEdges(glm::vec2 mouse, glm::vec2 screenDims,
                 }
             }
             if(doInvalidate)
-                model->invalidate(renderDevice, context);
+                invalidateModel(context);
         }
     }
 }

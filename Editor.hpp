@@ -34,6 +34,9 @@ struct Texture {
     DgTextureView textureSRV;
 };
 
+glm::vec3 vec3FromPoint(PolyMesh::Point p);
+PolyMesh::Point vec3ToPoint(glm::vec3 v);
+
 struct Ray {
     glm::vec3 origin, direction;
 };
@@ -61,11 +64,15 @@ struct EdgeSelectionVertex {
 };
 
 class Model {
-    void populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext context);
+    void populateRenderBuffers(DgRenderDevice renderDevice, DgDeviceContext context,
+                               float wireframeThickness);
     
     int lastNumVerts = 0;
     int lastNumTris = 0;
     int lastNumWireframeVerts = 0;
+    
+    std::vector<RenderVertex> surfaceVertices;
+    std::vector<RenderTriange> surfaceTrianges;
     
 public:
     Model();
@@ -84,7 +91,9 @@ public:
     int numTrisIndices = 0;
     int numLinesIndices = 0;
     
-    void invalidate(DgRenderDevice renderDevice, DgDeviceContext context);
+    void invalidate(DgRenderDevice renderDevice, DgDeviceContext context, float wireframeThickness = 0.02f);
+    void recreateWireframe(DgRenderDevice renderDevice, DgDeviceContext context,
+                           float wireframeThickness = 0.02f);
 };
 
 Model createCubeModel();
@@ -115,6 +124,7 @@ private:
 };
 
 class Editor {
+    float lastWireframeThickness = 0.02f;
 public:
     Editor(DgRenderDevice renderDevice, DgSwapChain swapChain, Texture& matcap,
            RendererCreateOptions options);
@@ -123,14 +133,20 @@ public:
     glm::mat4 view;
     glm::vec3 eye;
     
+    float wireframeThickness = 0.02f;
+    float modelNearestPointDistance = 0.0f;
+    
     Texture matcap;
     DgRenderDevice renderDevice;
     ModelRenderer renderer;
     
     bool isShiftPressed = false;
     
-    void raycastEdges(glm::vec2 mouse, glm::vec2 screenDims,
-                      DgRenderDevice renderDevice, DgDeviceContext context);
+    void raycastEdges(glm::vec2 mouse, glm::vec2 screenDims, DgDeviceContext context);
+    
+    void measureDistance();
+    void recreateWireframeIfNeed(DgDeviceContext context);
+    void invalidateModel(DgDeviceContext context);
     
     Model* model = nullptr;
     
@@ -210,7 +226,9 @@ float2 matcap2(float3 normal) {
         pow(viewNormal.y, 2.0) +
         pow(viewNormal.z + 1.0, 2.0)
    );
-    return viewNormal.xy / 2.8284271247461903 + 0.5;
+   float2 uv = viewNormal.xy / 2.8284271247461903 + 0.5;
+   uv.y = 1.0 - uv.y;
+   return uv;
 }
 
 void main(in  PSInput  PSIn,
@@ -221,11 +239,9 @@ void main(in  PSInput  PSIn,
     float3 base = g_Texture.Sample(g_Texture_sampler, matcap2(PSIn.Normal)).rgb;
     float4 col = PSIn.Color;
     if(col.g < 0.005) {
-        col = float4(1.0, 0.5, 0.0, 1.0);
-    } else {
-        col = float4(1.0, 1.0, 1.0, 1.0);
+        base = lerp(base, float3(1.0, 0.5, 0.0), 0.5);
     }
-    PSOut.Color = float4(base, 1.0) * col;
+    PSOut.Color = float4(base, 1.0);
     // PSOut.Color = float4(-float3(mul(float4(normalize(-PSIn.Normal), 1.0), g_ModelView)), 1.0);
     // PSOut.Color = g_Texture.Sample(g_Texture_sampler, float2(PSIn.Pos.x / 1280.0, PSIn.Pos.y / 720.0));
     // float4(no.x, no.y, no.z, 1.0f);

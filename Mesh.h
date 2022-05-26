@@ -16,6 +16,8 @@
 
 typedef OpenMesh::PolyMesh_ArrayKernelT<> PolyMesh;
 
+std::list<PolyMesh::FaceHandle> getSelectedFaces(PolyMesh& mesh);
+
 class SelectionBoundaryIter {
     std::unordered_map<PolyMesh::FaceHandle, bool> selectedFacesMap;
     std::unordered_map<PolyMesh::HalfedgeHandle, int> traversedHalfedges;
