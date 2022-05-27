@@ -381,7 +381,7 @@ void extrude(PolyMesh& mesh, bool debug) {
     //            edgeTopOrigin, edgeTopEnd, edgeBottomEnd, edgeBottomOrigin
             };
             PolyMesh::FaceHandle face = mesh.add_face(faceVerts);
-            mesh.calc_normal(face);
+//            mesh.calc_normal(face);
         }
     }
     
@@ -727,7 +727,7 @@ std::vector<PolyMesh::VertexHandle> makeBevelSegments(PolyMesh::Point p0, PolyMe
     return vertices;
 }
 
-void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
+void bevelOld(PolyMesh& mesh, int segments, float radius, bool debug) {
     std::vector<PolyMesh::VertexHandle> selVerts;
     for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected()))
         selVerts.push_back(vh);
@@ -842,6 +842,145 @@ void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
 //
 //    for(auto vh : duplicates)
 //        mesh.status(vh).set_selected(true);
+}
+
+struct AddFaceVertInfo {
+    PolyMesh::VertexHandle vert;
+    PolyMesh::VertexHandle rightSibling;
+    PolyMesh::VertexHandle leftSibling;
+};
+
+void addRemoveFaceVerts(std::vector<AddFaceVertInfo> add,
+                        std::vector<PolyMesh::VertexHandle> remove,
+                        PolyMesh::FaceHandle face, PolyMesh& mesh) {
+    std::unordered_map<PolyMesh::VertexHandle, bool> removeMap;
+    for(auto vh : remove)
+        removeMap[vh] = true;
+    std::vector<PolyMesh::VertexHandle> oldFaceVerts;
+    for(auto fvh : mesh.fv_ccw_range(face)) {
+        oldFaceVerts.push_back(fvh);
+    }
+    std::vector<PolyMesh::VertexHandle> newFaceVerts;
+    newFaceVerts.reserve(oldFaceVerts.size());
+    for(int i = 0; i < oldFaceVerts.size(); i++) {
+        bool isStart = i == 0;
+        PolyMesh::VertexHandle prev = isStart? oldFaceVerts.back() : oldFaceVerts[i - 1];
+        PolyMesh::VertexHandle cur = oldFaceVerts[i];
+        
+        for(AddFaceVertInfo& addInfo : add) {
+            bool case1 = addInfo.leftSibling == prev && addInfo.rightSibling == cur;
+            bool case2 = addInfo.leftSibling == cur && addInfo.rightSibling == prev;
+            if(case1 || case2) {
+                newFaceVerts.push_back(addInfo.vert);
+            }
+        }
+        
+        if(removeMap.find(cur) == removeMap.end())
+            newFaceVerts.push_back(cur);
+    }
+    mesh.delete_face(face, false);
+    mesh.add_face(newFaceVerts);
+}
+
+struct BevelPoint {
+    PolyMesh::VertexHandle vert;
+    PolyMesh::HalfedgeHandle ongoing;
+};
+
+struct BevelVertex {
+    std::list<BevelPoint> points;
+    PolyMesh::VertexHandle vert;
+};
+
+void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
+    std::vector<PolyMesh::VertexHandle> selVerts;
+    for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected()))
+        selVerts.push_back(vh);
+    
+    if(selVerts.size() < 2)
+        return;
+    
+    PolyMesh::HalfedgeHandle heh = mesh.find_halfedge(selVerts[0], selVerts[1]);
+    if(heh == PolyMesh::InvalidHalfedgeHandle)
+        return;
+    
+    std::vector<PolyMesh::VertexHandle> verts = { selVerts[0], selVerts[1] };
+    
+    std::vector<BevelVertex> bevelVerts;
+    bevelVerts.reserve(verts.size());
+    
+    for(int i = 0; i < verts.size(); i++) {
+        bool isEnd = i == verts.size() - 1;
+        PolyMesh::VertexHandle next = isEnd? verts[i - 1] : verts[i + 1];
+        PolyMesh::VertexHandle cur = verts[i];
+        PolyMesh::HalfedgeHandle he = mesh.find_halfedge(cur, next);
+        PolyMesh::Point origin = mesh.point(cur);
+        BevelVertex bevelVert;
+        bevelVert.vert = cur;
+        for(auto vhehIt = mesh.voh_cwiter(cur); vhehIt.is_valid(); vhehIt++) {
+            PolyMesh::Point to = mesh.point(vhehIt->to());
+            PolyMesh::Point dirTo = (to - origin).normalize();
+            PolyMesh::Point pointPos = dirTo * radius + origin;
+            BevelPoint point;
+            point.vert = mesh.add_vertex(pointPos);
+            point.ongoing = *vhehIt;
+            bevelVert.points.push_back(point);
+        }
+        bevelVerts.push_back(bevelVert);
+    }
+    
+    // Remove bevel points along the path except ends
+    for(int i = 0; i < bevelVerts.size(); i++) {
+        bool isStart = i == 0;
+        bool isEnd = i == bevelVerts.size() - 1;
+        BevelVertex& prev = isStart? bevelVerts[i] : bevelVerts[i - 1];
+        BevelVertex& next = isEnd? bevelVerts[i] : bevelVerts[i + 1];
+        BevelVertex& cur = bevelVerts[i];
+        std::list<std::list<BevelPoint>::iterator> pointsToRemove;
+        for(auto ptIt = cur.points.begin(); ptIt != cur.points.end(); ptIt++) {
+            PolyMesh::VertexHandle to = mesh.to_vertex_handle(ptIt->ongoing);
+            if(to == next.vert || to == prev.vert) {
+                mesh.delete_vertex(ptIt->vert);
+                pointsToRemove.push_back(ptIt);
+            }
+        }
+        for(auto ptIt : pointsToRemove)
+            cur.points.erase(ptIt);
+    }
+    
+    // Cut the faces
+    for(int i = 0; i < bevelVerts.size(); i++) {
+        BevelVertex& cur = bevelVerts[i];
+        // Insert new vertices into edges
+        for(auto ptIt = cur.points.begin(); ptIt != cur.points.end(); ptIt++) {
+            PolyMesh::HalfedgeHandle twin = mesh.opposite_halfedge_handle(ptIt->ongoing);
+            AddFaceVertInfo addInfo;
+            addInfo.vert = ptIt->vert;
+            addInfo.leftSibling = cur.vert;
+            addInfo.rightSibling = mesh.to_vertex_handle(ptIt->ongoing);
+            PolyMesh::FaceHandle face1 = mesh.face_handle(ptIt->ongoing);
+            if(face1 != PolyMesh::InvalidFaceHandle)
+                addRemoveFaceVerts({addInfo}, {}, face1, mesh);
+            PolyMesh::FaceHandle face2 = mesh.face_handle(twin);
+            if(face2 != PolyMesh::InvalidFaceHandle)
+                addRemoveFaceVerts({addInfo}, {}, face2, mesh);
+            ptIt->ongoing = mesh.find_halfedge(cur.vert, ptIt->vert);
+        }
+        // Remove center vertex from all faces
+        for(auto ptIt = cur.points.begin(); ptIt != cur.points.end(); ptIt++) {
+            PolyMesh::HalfedgeHandle twin = mesh.opposite_halfedge_handle(ptIt->ongoing);
+            PolyMesh::FaceHandle face1 = mesh.face_handle(ptIt->ongoing);
+            if(face1 != PolyMesh::InvalidFaceHandle)
+                addRemoveFaceVerts({}, {cur.vert}, face1, mesh);
+            PolyMesh::FaceHandle face2 = mesh.face_handle(twin);
+            if(face2 != PolyMesh::InvalidFaceHandle)
+                addRemoveFaceVerts({}, {cur.vert}, face2, mesh);
+        }
+    }
+    
+    // Remove disconnected vertices
+    for(auto vh : selVerts)
+        mesh.delete_vertex(vh);
 }
 
 MeshViewer2D::MeshViewer2D(PolyMesh* mesh):

@@ -94,6 +94,8 @@ App::App():
     mesh.request_vertex_status();
     mesh.request_halfedge_texcoords2D();
     mesh.request_vertex_texcoords2D();
+    mesh.request_vertex_normals();
+    mesh.request_face_normals();
     
     std::vector<std::wstring> lines = {
         L"Esc - exit halfedge demo",
@@ -358,7 +360,7 @@ int App::run()
                             if(heh.selected())
                                 model.originalMesh.status(heh.edge()).set_selected(true);
                         }
-                        model.invalidate(mDevice, mImmediateContext);
+                        model.invalidate(mDevice, mImmediateContext, editor->wireframeThickness);
                     }
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_Z) {
                         OpenMesh::Subdivider::Uniform::CatmullClarkT<PolyMesh> subdiv;
