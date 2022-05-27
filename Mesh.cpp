@@ -850,7 +850,7 @@ struct AddFaceVertInfo {
     PolyMesh::VertexHandle leftSibling;
 };
 
-void addRemoveFaceVerts(std::vector<AddFaceVertInfo> add,
+PolyMesh::FaceHandle addRemoveFaceVerts(std::vector<AddFaceVertInfo> add,
                         std::vector<PolyMesh::VertexHandle> remove,
                         PolyMesh::FaceHandle face, PolyMesh& mesh) {
     std::unordered_map<PolyMesh::VertexHandle, bool> removeMap;
@@ -879,12 +879,13 @@ void addRemoveFaceVerts(std::vector<AddFaceVertInfo> add,
             newFaceVerts.push_back(cur);
     }
     mesh.delete_face(face, false);
-    mesh.add_face(newFaceVerts);
+    return mesh.add_face(newFaceVerts);
 }
 
 struct BevelPoint {
     PolyMesh::VertexHandle vert;
     PolyMesh::HalfedgeHandle ongoing;
+    PolyMesh::FaceHandle face = PolyMesh::InvalidFaceHandle;
 };
 
 struct BevelVertex {
@@ -892,17 +893,30 @@ struct BevelVertex {
     PolyMesh::VertexHandle vert;
 };
 
-void fillBevelTip(BevelVertex& bevelVert, std::vector<PolyMesh::VertexHandle>& segments, PolyMesh& mesh) {
+void fillBevelTip(BevelVertex& bevelVert, std::vector<PolyMesh::VertexHandle>& segments,
+                  PolyMesh& mesh, bool counterClockwise = false) {
     PolyMesh::VertexHandle left = bevelVert.points.front().vert;
     PolyMesh::VertexHandle middle = std::next(bevelVert.points.begin())->vert;
     PolyMesh::VertexHandle right = bevelVert.points.back().vert;
-    if(segments.size() == 0) {
-        mesh.add_face(left, middle, right);
+    if(!counterClockwise) {
+        if(segments.size() == 0) {
+            mesh.add_face(left, middle, right);
+        } else {
+            mesh.add_face(left, middle, segments.front());
+            mesh.add_face(middle, right, segments.back());
+            for(int i = 0; i < segments.size() - 1; i++) {
+                mesh.add_face(segments[i], middle, segments[i + 1]);
+            }
+        }
     } else {
-        mesh.add_face(left, middle, segments.front());
-        mesh.add_face(middle, right, segments.back());
-        for(int i = 0; i < segments.size() - 1; i++) {
-            mesh.add_face(segments[i], middle, segments[i + 1]);
+        if(segments.size() == 0) {
+            mesh.add_face(right, middle, left);
+        } else {
+            mesh.add_face(segments.front(), middle, left);
+            mesh.add_face(segments.back(), right, middle);
+            for(int i = 0; i < segments.size() - 1; i++) {
+                mesh.add_face(segments[i + 1], middle, segments[i]);
+            }
         }
     }
 }
@@ -934,6 +948,31 @@ std::list<BevelPoint> reorderBevelPoints(std::list<BevelPoint> points,
     }
     return newBevelPts;
 }
+
+class Enumerator {
+    int to;
+    int cur;
+    bool reverse;
+    
+public:
+    Enumerator(int from, int to, bool reverse):
+        to(to), cur(from), reverse(reverse) {}
+    
+    bool isEnd() {
+        return cur == to;
+    }
+    
+    int index() {
+        return cur;
+    }
+    
+    void operator++(int n) {
+        if(reverse)
+            cur--;
+        else
+            cur++;
+    }
+};
 
 void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
     std::vector<PolyMesh::VertexHandle> selVerts;
@@ -1037,10 +1076,14 @@ void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
             PolyMesh::HalfedgeHandle twin = mesh.opposite_halfedge_handle(ptIt->ongoing);
             PolyMesh::FaceHandle face1 = mesh.face_handle(ptIt->ongoing);
             if(face1 != PolyMesh::InvalidFaceHandle)
-                addRemoveFaceVerts({}, {cur.vert}, face1, mesh);
+                face1 = addRemoveFaceVerts({}, {cur.vert}, face1, mesh);
             PolyMesh::FaceHandle face2 = mesh.face_handle(twin);
             if(face2 != PolyMesh::InvalidFaceHandle)
-                addRemoveFaceVerts({}, {cur.vert}, face2, mesh);
+                face2 = addRemoveFaceVerts({}, {cur.vert}, face2, mesh);
+            ptIt->face = face1;
+            if(i == bevelVerts.size() - 1) {
+                ptIt->face = face2;
+            }
         }
     }
     
@@ -1057,19 +1100,51 @@ void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
                                                   mesh.point(C), segments, mesh));
     }
     
+    // Dissolve holes
+    for(int i = 0; i < bevelVerts.size(); i++) {
+        BevelVertex& cur = bevelVerts[i];
+        auto& curSegs = bevelSegments[i];
+        if(cur.points.size() == 2 && (i == 0 || i == bevelVerts.size() - 1)) {
+            PolyMesh::FaceHandle face = cur.points.front().face;
+            std::vector<AddFaceVertInfo> addInfos;
+            addInfos.reserve(curSegs.size());
+            // Iterate over the segments from first to last
+            Enumerator j = Enumerator(curSegs.size() - 1, -1, true);
+            if(i == bevelVerts.size() - 1) {
+                // Iterate over the segments in reverse order
+                j = Enumerator(0, curSegs.size(), false);
+            }
+            for(; !j.isEnd(); j++) {
+                bool isFront = j.index() == 0;
+                bool isBack = j.index() == curSegs.size() - 1;
+                PolyMesh::VertexHandle leftSeg;
+                PolyMesh::VertexHandle rightSeg;
+                leftSeg = cur.points.front().vert;
+                rightSeg = cur.points.back().vert;
+                PolyMesh::VertexHandle curSeg = curSegs[j.index()];
+                AddFaceVertInfo addInfo;
+                addInfo.vert = curSeg;
+                addInfo.leftSibling = leftSeg;
+                addInfo.rightSibling = rightSeg;
+                addInfos.push_back(addInfo);
+            }
+            addRemoveFaceVerts(addInfos, {}, face, mesh);
+        }
+    }
+    
     // Fill faces
     for(int i = 0; i < bevelVerts.size() - 1; i++) {
         BevelVertex& cur = bevelVerts[i];
         BevelVertex& next = bevelVerts[i + 1];
+        auto& curSegs = bevelSegments[i];
+        auto& nextSegs = bevelSegments[i + 1];
         if(cur.points.size() == 3) {
-//            fillBevelTip(cur, bevelSegments[i], mesh);
+            fillBevelTip(cur, bevelSegments[i], mesh);
         }
         if(segments == 0) {
             mesh.add_face(cur.points.front().vert, cur.points.back().vert,
                           next.points.back().vert, next.points.front().vert);
         } else {
-            auto& curSegs = bevelSegments[i];
-            auto& nextSegs = bevelSegments[i + 1];
             mesh.add_face(cur.points.front().vert, curSegs.front(),
                           nextSegs.front(), next.points.front().vert);
             mesh.add_face(cur.points.back().vert, next.points.back().vert,
@@ -1083,7 +1158,7 @@ void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
             }
         }
         if(next.points.size() == 3) {
-//            fillBevelTip(cur, bevelSegments[i + 1], mesh);
+            fillBevelTip(next, bevelSegments[i + 1], mesh, true);
         }
     }
     
