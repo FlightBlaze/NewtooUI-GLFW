@@ -233,14 +233,6 @@ void Model::invalidate(DgRenderDevice renderDevice, DgDeviceContext context, flo
     }
 }
 
-glm::vec3 vec3FromPoint(PolyMesh::Point p) {
-    return glm::vec3(p[0], p[1], p[2]);
-}
-
-PolyMesh::Point vec3ToPoint(glm::vec3 v) {
-    return PolyMesh::Point(v.x, v.y, v.z);
-}
-
 glm::vec2 vec2FromTexCoord2D(PolyMesh::TexCoord2D co) {
     return glm::vec2(co[0], co[1]);
 }

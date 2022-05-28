@@ -34,9 +34,6 @@ struct Texture {
     DgTextureView textureSRV;
 };
 
-glm::vec3 vec3FromPoint(PolyMesh::Point p);
-PolyMesh::Point vec3ToPoint(glm::vec3 v);
-
 struct Ray {
     glm::vec3 origin, direction;
 };

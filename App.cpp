@@ -224,8 +224,13 @@ int App::run()
                     if(currentEvent.key.keysym.scancode == SDL_SCANCODE_O)
                         openRegion(mesh);
                     
-                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_B)
+                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_B) {
+                        for(auto eh : mesh.edges()) {
+                            if(eh.v0().selected() && eh.v1().selected())
+                                mesh.status(eh).set_selected(true);
+                        }
                         bevel(mesh, 3);
+                    }
                     
 //                    if(currentEvent.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
 //                        HE::HalfEdge* he = mesh.findDebugSelectedHalfEdge();

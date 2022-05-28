@@ -16,6 +16,9 @@
 
 typedef OpenMesh::PolyMesh_ArrayKernelT<> PolyMesh;
 
+glm::vec3 vec3FromPoint(PolyMesh::Point p);
+PolyMesh::Point vec3ToPoint(glm::vec3 v);
+
 std::list<PolyMesh::FaceHandle> getSelectedFaces(PolyMesh& mesh);
 
 class SelectionBoundaryIter {

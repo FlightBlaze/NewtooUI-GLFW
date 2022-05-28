@@ -9,6 +9,14 @@
 #include <OpenMesh/Core/Utils/Predicates.hh>
 #include <unordered_map>
 
+glm::vec3 vec3FromPoint(PolyMesh::Point p) {
+    return glm::vec3(p[0], p[1], p[2]);
+}
+
+PolyMesh::Point vec3ToPoint(glm::vec3 v) {
+    return PolyMesh::Point(v.x, v.y, v.z);
+}
+
 std::list<PolyMesh::FaceHandle> getSelectedFaces(PolyMesh& mesh) {
     std::list<PolyMesh::FaceHandle> faces;
     std::unordered_map<PolyMesh::FaceHandle, bool> facesMap;
@@ -974,19 +982,39 @@ public:
     }
 };
 
-void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
-    std::vector<PolyMesh::VertexHandle> selVerts;
-    for (auto vh : mesh.vertices().filtered(OpenMesh::Predicates::Selected()))
-        selVerts.push_back(vh);
-    
-    if(selVerts.size() < 2)
-        return;
-    
-    PolyMesh::HalfedgeHandle heh = mesh.find_halfedge(selVerts[0], selVerts[1]);
-    if(heh == PolyMesh::InvalidHalfedgeHandle)
-        return;
-    
-    std::vector<PolyMesh::VertexHandle> verts = { selVerts[0], selVerts[1] };
+std::list<std::list<PolyMesh::VertexHandle>> traceSelectedEdges(PolyMesh& mesh) {
+    std::list<std::list<PolyMesh::VertexHandle>> pathes;
+    std::unordered_map<PolyMesh::EdgeHandle, bool> knownEdges;
+    for (auto eh : mesh.edges().filtered(OpenMesh::Predicates::Selected())) {
+        if(knownEdges.find(eh) != knownEdges.end())
+            continue;
+        knownEdges[eh] = true;
+        std::list<PolyMesh::VertexHandle> path = { eh.v0(), eh.v1() };
+        bool hasAnyContinuation = true;
+        do {
+            for(auto vhehIt = mesh.voh_cwiter(path.back()); vhehIt.is_valid(); vhehIt++) {
+                hasAnyContinuation = false;
+                PolyMesh::VertexHandle vert = mesh.to_vertex_handle(*vhehIt);
+                PolyMesh::EdgeHandle edge = mesh.edge_handle(*vhehIt);
+                if(mesh.status(vert).selected() &&
+                   knownEdges.find(edge) == knownEdges.end()) {
+                    hasAnyContinuation = true;
+                    path.push_back(vert);
+                    knownEdges[edge] = true;
+                    break;
+                }
+            }
+        } while(hasAnyContinuation);
+        pathes.push_back(path);
+    }
+    return pathes;
+}
+
+void bevelPath(std::list<PolyMesh::VertexHandle> path, PolyMesh& mesh, int segments, float radius, bool debug) {
+    std::vector<PolyMesh::VertexHandle> verts;
+    verts.reserve(path.size());
+    for(auto vh : path)
+        verts.push_back(vh);
     
     std::vector<BevelVertex> bevelVerts;
     bevelVerts.reserve(verts.size());
@@ -1042,9 +1070,13 @@ void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
                 break;
             }
         }
+        PolyMesh::VertexHandle start = bevelVerts[0].vert;
+        PolyMesh::VertexHandle end = bevelVerts.back().vert;
         for(auto ptIt = cur.points.begin(); ptIt != cur.points.end(); ptIt++) {
             PolyMesh::VertexHandle to = mesh.to_vertex_handle(ptIt->ongoing);
-            if(to == next.vert || to == prev.vert) {
+            bool specialCase1 = isStart && to == bevelVerts[bevelVerts.size() - 2].vert;
+            bool specialCase2 = isEnd && to == bevelVerts[1].vert;
+            if(to == next.vert || to == prev.vert || specialCase1 || specialCase2) {
                 mesh.delete_vertex(ptIt->vert);
                 pointsToRemove.push_back(ptIt);
             }
@@ -1073,6 +1105,8 @@ void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
         }
         // Remove center vertex from all faces
         for(auto ptIt = cur.points.begin(); ptIt != cur.points.end(); ptIt++) {
+            if(ptIt->ongoing == PolyMesh::InvalidHalfedgeHandle)
+                continue;
             PolyMesh::HalfedgeHandle twin = mesh.opposite_halfedge_handle(ptIt->ongoing);
             PolyMesh::FaceHandle face1 = mesh.face_handle(ptIt->ongoing);
             if(face1 != PolyMesh::InvalidFaceHandle)
@@ -1100,12 +1134,24 @@ void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
                                                   mesh.point(C), segments, mesh));
     }
     
+    // Connect start segments with end
+    if(verts.front().idx() == verts.back().idx()) {
+        for(int j = 0; j < bevelSegments.front().size() - 1; j++) {
+            mesh.delete_vertex(bevelSegments.back()[j]);
+            bevelSegments.back()[j] = bevelSegments.front()[j];
+        }
+    }
+    
     // Dissolve holes
     for(int i = 0; i < bevelVerts.size(); i++) {
         BevelVertex& cur = bevelVerts[i];
         auto& curSegs = bevelSegments[i];
         if(cur.points.size() == 2 && (i == 0 || i == bevelVerts.size() - 1)) {
             PolyMesh::FaceHandle face = cur.points.front().face;
+            if(face == PolyMesh::InvalidFaceHandle)
+                continue;
+            if(mesh.status(face).deleted())
+                continue;
             std::vector<AddFaceVertInfo> addInfos;
             addInfos.reserve(curSegs.size());
             // Iterate over the segments from first to last
@@ -1163,8 +1209,185 @@ void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
     }
     
     // Remove disconnected vertices
-    for(auto vh : selVerts)
+    for(auto vh : verts)
         mesh.delete_vertex(vh);
+}
+
+void bevel(PolyMesh& mesh, int segments, float radius, bool debug) {
+    auto pathes = traceSelectedEdges(mesh);
+    for(auto& path : pathes) {
+        std::list<std::list<PolyMesh::VertexHandle>::iterator> toErase;
+        for(auto vhIt = path.begin(); vhIt != path.end(); vhIt++) {
+            if(mesh.status(*vhIt).deleted())
+                toErase.push_back(vhIt);
+        }
+        for(auto it : toErase)
+            path.erase(it);
+        bevelPath(path, mesh, segments, radius, debug);
+    }
+}
+
+// I took it from OpenMesh sources
+std::vector<PolyMesh::FaceHandle> triangulateFace(PolyMesh::FaceHandle _fh, PolyMesh& mesh)
+{
+    std::vector<PolyMesh::FaceHandle> faces = { _fh };
+    PolyMesh::HalfedgeHandle base_heh(mesh.halfedge_handle(_fh));
+    PolyMesh::VertexHandle start_vh = mesh.from_vertex_handle(base_heh);
+    PolyMesh::HalfedgeHandle prev_heh(mesh.prev_halfedge_handle(base_heh));
+    PolyMesh::HalfedgeHandle next_heh(mesh.next_halfedge_handle(base_heh));
+    while (mesh.to_vertex_handle(mesh.next_halfedge_handle(next_heh)) != start_vh)
+    {
+        PolyMesh::HalfedgeHandle next_next_heh(mesh.next_halfedge_handle(next_heh));
+
+        PolyMesh::FaceHandle new_fh = mesh.new_face();
+        mesh.set_halfedge_handle(new_fh, base_heh);
+
+        PolyMesh::HalfedgeHandle new_heh = mesh.new_edge(mesh.to_vertex_handle(next_heh), start_vh);
+
+        mesh.set_next_halfedge_handle(base_heh, next_heh);
+        mesh.set_next_halfedge_handle(next_heh, new_heh);
+        mesh.set_next_halfedge_handle(new_heh, base_heh);
+
+        mesh.set_face_handle(base_heh, new_fh);
+        mesh.set_face_handle(next_heh, new_fh);
+        mesh.set_face_handle(new_heh,  new_fh);
+
+        mesh.copy_all_properties(prev_heh, new_heh, true);
+        mesh.copy_all_properties(prev_heh, mesh.opposite_halfedge_handle(new_heh), true);
+        mesh.copy_all_properties(_fh, new_fh, true);
+
+        base_heh = mesh.opposite_halfedge_handle(new_heh);
+        next_heh = next_next_heh;
+        
+        faces.push_back(new_fh);
+    }
+    mesh.set_halfedge_handle(_fh, base_heh);  //the last face takes the handle _fh
+
+    mesh.set_next_halfedge_handle(base_heh, next_heh);
+    mesh.set_next_halfedge_handle(mesh.next_halfedge_handle(next_heh), base_heh);
+
+    mesh.set_face_handle(base_heh, _fh);
+    
+    return faces;
+}
+
+PolyMesh::FaceHandle copyFace(PolyMesh::FaceHandle fh, PolyMesh& mesh) {
+    std::vector<PolyMesh::VertexHandle> faceVerts;
+    for(auto fvhIt = mesh.fv_ccwiter(fh); fvhIt.is_valid(); fvhIt++) {
+        faceVerts.push_back(mesh.add_vertex(mesh.point(*fvhIt)));
+    }
+    PolyMesh::FaceHandle copyFh = mesh.add_face(faceVerts);
+    return copyFh;
+}
+
+struct LineSeg {
+    glm::vec3 a, b;
+    bool intersects = false;
+};
+
+LineSeg triTriIntersect(PolyMesh::FaceHandle triA, PolyMesh::FaceHandle triB) {
+    return LineSeg();
+}
+
+LineSeg faceFaceIntersect(PolyMesh::FaceHandle faceA, PolyMesh& meshA,
+                          PolyMesh::FaceHandle faceB, PolyMesh& meshB) {
+    PolyMesh::FaceHandle copyFaceA = copyFace(faceA, meshA);
+    std::vector<PolyMesh::FaceHandle> aTris = triangulateFace(copyFaceA, meshA);
+    for(auto tri : aTris)
+        meshA.delete_face(tri);
+    return LineSeg();
+}
+
+struct LineSegI {
+    LineSegI *next = nullptr;
+    LineSegI *prev = nullptr;
+    glm::vec3 v1;
+    glm::vec3 v2;
+    PolyMesh::FaceHandle face1, face2;
+    
+    LineSegI(glm::vec3 v1, glm::vec3 v2,
+               PolyMesh::FaceHandle face1,
+               PolyMesh::FaceHandle face2): v1(v1), v2(v2), face1(face1), face2(face2) {}
+};
+
+bool isPointLyingOnSegment(glm::vec3 point, glm::vec3 start, glm::vec3 end, float threshold = 0.0001f) {
+    float offset = fabs(glm::distance(start, end) -
+        (glm::distance(point, start) + glm::distance(point, end)));
+    return offset < threshold;
+}
+
+// 1. Пройтись по всем граням первой полисетки и найти пересечения
+//    с граниями второй полисетки.
+// 2. У сегментов пересечения объединить вершины, которые находятся
+//    очень близко.
+// 3. Соединить друг с другом соседние сегменты, у которых общая
+//    вершина.
+// 4. Найти все пути из сегментов.
+// 5. Разрезать пересекающиеся грани вдоль пути пересечения. Если
+//    пути пересечения не имеют точек, лежащих на границе грани,
+//    то разрезать грань пополам с добавлением вершин пересечения.
+void intersection(PolyMesh& a, PolyMesh& b) {
+    std::list<LineSegI> segs;
+    std::list<LineSegI> pathHeads;
+    for(auto faceA : a.faces()) {
+        // TODO: replace with BVH traversal
+        for(auto faceB : b.faces()) {
+            LineSeg seg = faceFaceIntersect(faceA, a, faceB, b);
+            if(seg.intersects) {
+                segs.push_back(LineSegI(seg.a, seg.b, faceA, faceB));
+            }
+        }
+    }
+    float threshold = 0.0001f;
+//    for(auto seg1 : segs) {
+//        for(auto seg2 : segs) {
+//            if(glm::distance(seg1.v2, seg2.v1) < threshold) {
+//                seg1.next = &seg2;
+//                seg2.prev = &seg1;
+//            }
+//            if(glm::distance(seg1.v2, seg2.v1) < threshold) {
+//                seg1.next = &seg2;
+//                seg2.prev = &seg1;
+//            }
+//        }
+//    }
+    for(LineSegI head : pathHeads) {
+        std::unordered_map<PolyMesh::VertexHandle, bool> insertedVerts;
+//        std::list<PolyMesh::VertexHandle> insertedVertsOrder;
+        int pointOnSegmentCount = 0;
+        LineSegI* cur = &head;
+        while(cur != nullptr) {
+            for(auto hehIt = a.fh_cwiter(cur->face1); hehIt.is_valid(); hehIt++) {
+                glm::vec3 start = vec3FromPoint(a.point(a.from_vertex_handle(*hehIt)));
+                glm::vec3 end = vec3FromPoint(a.point(a.to_vertex_handle(*hehIt)));
+                std::array<glm::vec3, 2> segPoints = { cur->v1, cur->v2 };
+                for(glm::vec3 pt : segPoints) {
+                    if(isPointLyingOnSegment(pt, start, end)) {
+                        pointOnSegmentCount++;
+                        PolyMesh::VertexHandle v = a.add_vertex(vec3ToPoint(pt));
+                        insertedVerts[v] = true;
+//                        insertedVertsOrder.push_back(v);
+                        a.split_edge(hehIt->edge(), v);
+                    }
+                }
+            }
+            cur = cur->next;
+        }
+        std::vector<PolyMesh::VertexHandle> newFaceVerts;
+        PolyMesh::VertexHandle end = PolyMesh::InvalidVertexHandle;
+        for(auto vhIt = a.fv_cwiter(cur->face1); vhIt.is_valid(); vhIt++) {
+            if(insertedVerts[*vhIt]) {
+                if(*vhIt == end) {
+                    end = PolyMesh::InvalidVertexHandle;
+                }
+                
+            } else if(end == PolyMesh::InvalidVertexHandle) {
+                newFaceVerts.push_back(*vhIt);
+            }
+        }
+        a.delete_face(cur->face1);
+        a.add_face(newFaceVerts);
+    }
 }
 
 MeshViewer2D::MeshViewer2D(PolyMesh* mesh):
