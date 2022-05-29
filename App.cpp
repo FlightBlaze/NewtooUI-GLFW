@@ -1267,6 +1267,12 @@ void App::initializeResources()
     // Halfedge 3D editor
     
     model = createCubeModel();
+    
+    PolyMesh cube2 = model.originalMesh;
+    for(auto vh : cube2.vertices())
+        cube2.set_point(vh, cube2.point(vh) + PolyMesh::Point(0.5f, 0.5f, 0.5f));
+    intersectMeshes(model.originalMesh, cube2);
+    
     model.originalMesh.status(*model.originalMesh.edges_begin()).set_selected(true);
     model.originalMesh.status(*model.originalMesh.faces_begin()).set_selected(true);
     model.isFlatShaded = true;

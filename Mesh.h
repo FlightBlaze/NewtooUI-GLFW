@@ -71,6 +71,8 @@ bool rayTriangleIntersect(
     const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2,
     float &t);
 
+void intersectMeshes(PolyMesh& a, PolyMesh& b);
+
 enum class CurrentTransform {
     None,
     Move,

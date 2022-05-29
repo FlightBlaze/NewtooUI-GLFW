@@ -1422,11 +1422,11 @@ std::list<LineSeg> faceFaceIntersect(PolyMesh::FaceHandle faceA, PolyMesh& meshA
 struct LineSegI {
     LineSegI *next = nullptr;
     LineSegI *prev = nullptr;
-    glm::vec3 v1;
-    glm::vec3 v2;
+    PolyMesh::VertexHandle v1;
+    PolyMesh::VertexHandle v2;
     PolyMesh::FaceHandle face1, face2;
     
-    LineSegI(glm::vec3 v1, glm::vec3 v2,
+    LineSegI(PolyMesh::VertexHandle v1, PolyMesh::VertexHandle v2,
                PolyMesh::FaceHandle face1,
                PolyMesh::FaceHandle face2): v1(v1), v2(v2), face1(face1), face2(face2) {}
 };
@@ -1603,43 +1603,115 @@ TwoFacesVerts cutFace(std::list<PolyMesh::VertexHandle> verts, PolyMesh::FaceHan
 // 5. Разрезать пересекающиеся грани вдоль пути пересечения. Если
 //    пути пересечения не имеют точек, лежащих на границе грани,
 //    то разрезать грань пополам с добавлением вершин пересечения.
-void intersection(PolyMesh& a, PolyMesh& b) {
+void intersectMeshes(PolyMesh& a, PolyMesh& b) {
     std::list<LineSegI> segs;
-    std::list<LineSegI> pathHeads;
+    std::list<LineSegI*> pathHeads;
+    // 1.
     for(auto faceA : a.faces()) {
         // TODO: replace with BVH traversal
         for(auto faceB : b.faces()) {
             auto segList = faceFaceIntersect(faceA, a, faceB, b);
             for(auto seg : segList) {
-                segs.push_back(LineSegI(seg.a, seg.b, faceA, faceB));
+                segs.push_back(LineSegI(a.add_vertex(vec3ToPoint(seg.a)),
+                                        a.add_vertex(vec3ToPoint(seg.b)), faceA, faceB));
             }
         }
     }
+    // 2.
     float threshold = 0.0001f;
-//    for(auto seg1 : segs) {
-//        for(auto seg2 : segs) {
-//            if(glm::distance(seg1.v2, seg2.v1) < threshold) {
-//                seg1.next = &seg2;
-//                seg2.prev = &seg1;
-//            }
-//            if(glm::distance(seg1.v2, seg2.v1) < threshold) {
-//                seg1.next = &seg2;
-//                seg2.prev = &seg1;
-//            }
-//        }
-//    }
+    std::unordered_map<int, std::vector<LineSegI*>> verts;
+    std::unordered_map<int, bool> knownVerts;
+    std::list<int> vertList;
+    for(auto& seg1 : segs) {
+        for(auto& seg2 : segs) {
+            if((a.point(seg1.v1) - a.point(seg2.v1)).length() < threshold) {
+                a.delete_vertex(seg2.v1);
+                seg2.v1 = seg1.v1;
+                verts[seg1.v1.idx()].push_back(&seg1);
+                verts[seg1.v1.idx()].push_back(&seg2);
+                vertList.push_back(seg1.v1.idx());
+                continue;
+            }
+            if((a.point(seg1.v2) - a.point(seg2.v1)).length() < threshold) {
+                a.delete_vertex(seg2.v1);
+                seg2.v1 = seg1.v2;
+                verts[seg1.v2.idx()].push_back(&seg1);
+                verts[seg1.v2.idx()].push_back(&seg2);
+                vertList.push_back(seg1.v2.idx());
+                continue;
+            }
+            if((a.point(seg1.v2) - a.point(seg2.v2)).length() < threshold) {
+                a.delete_vertex(seg2.v2);
+                seg2.v2 = seg1.v2;
+                verts[seg1.v2.idx()].push_back(&seg1);
+                verts[seg1.v2.idx()].push_back(&seg2);
+                vertList.push_back(seg1.v2.idx());
+                continue;
+            }
+            if((a.point(seg1.v1) - a.point(seg2.v2)).length() < threshold) {
+                a.delete_vertex(seg2.v2);
+                seg2.v2 = seg1.v1;
+                verts[seg1.v1.idx()].push_back(&seg1);
+                verts[seg1.v1.idx()].push_back(&seg2);
+                vertList.push_back(seg1.v1.idx());
+                continue;
+            }
+        }
+    }
+    for(auto& seg : segs) {
+        if(verts[seg.v1.idx()].size() == 0) {
+            verts[seg.v1.idx()].push_back(&seg);
+            vertList.push_back(seg.v1.idx());
+        }
+        if(verts[seg.v2.idx()].size() == 0) {
+            verts[seg.v2.idx()].push_back(&seg);
+            vertList.push_back(seg.v2.idx());
+        }
+    }
+    // 3, 4.
+    for(int vertInd : vertList) {
+        // Is it unknown start or end of path
+        if(verts[vertInd].size() == 1 && !knownVerts[vertInd]) {
+            int v = vertInd;
+            knownVerts[v] = true;
+            LineSegI* seg = verts[v].front();
+            pathHeads.push_back(seg);
+            while(true) {
+                if(seg->v2.idx() == v) {
+                    PolyMesh::VertexHandle vh = seg->v2;
+                    seg->v2 = seg->v1;
+                    seg->v1 = vh;
+                }
+                v = seg->v2.idx();
+                knownVerts[v] = true;
+                auto adjacentSegs = verts[v];
+                if(adjacentSegs.size() < 2)
+                    break;
+                LineSegI* nextSeg = nullptr;
+                if(adjacentSegs.front() != seg) {
+                    nextSeg = adjacentSegs.front();
+                } else {
+                    nextSeg = adjacentSegs.back();
+                }
+                seg->next = nextSeg;
+                nextSeg->prev = seg;
+                seg = nextSeg;
+            };
+        }
+    }
+    // 5.
     std::list<FaceCutting> faceCutting;
-    for(LineSegI head : pathHeads) {
-        LineSegI* cur = &head;
+    for(LineSegI* head : pathHeads) {
+        LineSegI* cur = head;
         PolyMesh::FaceHandle curFace = PolyMesh::InvalidFaceHandle;
         while(cur != nullptr) {
             if(cur->face1 != curFace) {
                 curFace = cur->face1;
                 FaceCutting fc;
-                fc.verts.push_back(a.add_vertex(vec3ToPoint(cur->v1)));
+                fc.verts.push_back(cur->v1);
                 faceCutting.push_back(fc);
             }
-            faceCutting.back().verts.push_back(a.add_vertex(vec3ToPoint(cur->v2)));
+            faceCutting.back().verts.push_back(cur->v2);
             cur = cur->next;
         }
     }
