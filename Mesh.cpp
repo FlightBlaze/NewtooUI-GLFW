@@ -1316,6 +1316,143 @@ bool isPointLyingOnSegment(glm::vec3 point, glm::vec3 start, glm::vec3 end, floa
     return offset < threshold;
 }
 
+bool isPointLyingOnTriangle(glm::vec3 point, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3,
+                            float threshold = 0.0001f) {
+    glm::vec3 centroid = (v1 + v2 + v3) / 3.0f;
+    float centroidDistancesSum = glm::distance(centroid, v1) +
+        glm::distance(centroid, v2) + glm::distance(centroid, v3);
+    float pointDistancesSum = glm::distance(point, v1) +
+        glm::distance(point, v2) + glm::distance(point, v3);
+    float offset = fabs(centroidDistancesSum - pointDistancesSum);
+    return offset < threshold;
+}
+
+struct FaceCutting {
+//    PolyMesh::FaceHandle face;
+    std::list<glm::vec3> points;
+};
+
+struct TwoFacesVerts {
+    std::list<PolyMesh::VertexHandle> first;
+    std::list<PolyMesh::VertexHandle> second;
+};
+
+TwoFacesVerts cutFace(std::list<PolyMesh::VertexHandle> verts, PolyMesh::FaceHandle fh, PolyMesh& mesh) {
+    TwoFacesVerts twoFaces;
+    std::vector<PolyMesh::VertexHandle> faceVerts;
+    int startInd = -1;
+    int endInd = -1;
+    int pointLyingOnFaceSideCount = 0;
+    glm::vec3 firstPoint = vec3FromPoint(mesh.point(verts.front()));
+    glm::vec3 lastPoint = vec3FromPoint(mesh.point(verts.back()));
+    for(auto hehIt = mesh.fh_cwiter(fh); hehIt.is_valid(); hehIt++) {
+        glm::vec3 start = vec3FromPoint(mesh.point(mesh.from_vertex_handle(*hehIt)));
+        glm::vec3 end = vec3FromPoint(mesh.point(mesh.to_vertex_handle(*hehIt)));
+        faceVerts.push_back(mesh.from_vertex_handle(*hehIt));
+        if(isPointLyingOnSegment(firstPoint, start, end)) {
+            faceVerts.push_back(verts.front());
+            startInd = faceVerts.size() - 1;
+            pointLyingOnFaceSideCount++;
+        }
+        if(isPointLyingOnSegment(lastPoint, start, end)) {
+            faceVerts.push_back(verts.back());
+            endInd = faceVerts.size() - 1;
+            pointLyingOnFaceSideCount++;
+        }
+    }
+    std::list<PolyMesh::VertexHandle> vertsForward = verts;
+    std::list<PolyMesh::VertexHandle> vertsBackward = verts;
+    vertsBackward.reverse();
+    PolyMesh::VertexHandle halfVert;
+    bool gotHalfVert = false;
+    int k = 0;
+    int halfSize = vertsForward.size() / 2;
+    int popTimes = 0;
+    for(PolyMesh::VertexHandle p : vertsForward) {
+        if(gotHalfVert)
+            popTimes++;
+        if(k == halfSize) {
+            halfVert = p;
+            gotHalfVert = true;
+        }
+        k++;
+    }
+    for(int i = 0; i < popTimes; i++) {
+        vertsForward.pop_back();
+    }
+    gotHalfVert = false;
+    popTimes = 0;
+    for(PolyMesh::VertexHandle p : vertsForward) {
+        if(gotHalfVert) {
+            popTimes++;
+        } else {
+            if(p == halfVert) {
+                gotHalfVert = true;
+            }
+        }
+    }
+    for(int i = 0; i < popTimes; i++) {
+        vertsBackward.pop_back();
+    }
+    glm::vec3 sliceStart = vec3FromPoint(mesh.point(vertsForward.front()));
+    glm::vec3 sliceEnd = vec3FromPoint(mesh.point(vertsForward.back()));
+    if(pointLyingOnFaceSideCount != 2) {
+        float minDistance = 100000;
+        for(int i = 0; i < faceVerts.size(); i++) {
+            glm::vec3 point = vec3FromPoint(mesh.point(faceVerts[i]));
+            float distance = glm::distance(point, sliceStart);
+            if(distance < minDistance) {
+                minDistance = distance;
+                startInd = i;
+            }
+        }
+        vertsForward.push_front(faceVerts[startInd]);
+        vertsBackward.push_back(faceVerts[startInd]);
+        minDistance = 100000;
+        for(int i = 0; i < faceVerts.size(); i++) {
+            glm::vec3 point = vec3FromPoint(mesh.point(faceVerts[i]));
+            float distance = glm::distance(point, sliceEnd);
+            if(distance < minDistance) {
+                minDistance = distance;
+                endInd = i;
+            }
+        }
+        vertsForward.push_back(faceVerts[endInd]);
+        vertsBackward.push_front(faceVerts[endInd]);
+    }
+    int ind = startInd + 1;
+    while(true) {
+        if(ind == faceVerts.size())
+            ind = 0;
+        if(ind == startInd)
+            break;
+        if(ind == endInd) {
+            for(auto it = vertsBackward.begin(); it != verts.end(); it++) {
+                twoFaces.first.push_back(*it);
+            }
+            break;
+        } else
+            twoFaces.first.push_back(faceVerts[ind]);
+        ind++;
+    }
+    ind = endInd + 1;
+    while(true) {
+        if(ind == faceVerts.size())
+            ind = 0;
+        if(ind == endInd)
+            break;
+        if(ind == startInd) {
+            for(auto it = vertsForward.begin(); it != verts.end(); it++) {
+                twoFaces.second.push_back(*it);
+            }
+            break;
+        } else
+            twoFaces.second.push_back(faceVerts[ind]);
+        ind++;
+    }
+    return twoFaces;
+}
+
 // 1. Пройтись по всем граням первой полисетки и найти пересечения
 //    с граниями второй полисетки.
 // 2. У сегментов пересечения объединить вершины, которые находятся
@@ -1367,7 +1504,7 @@ void intersection(PolyMesh& a, PolyMesh& b) {
                         PolyMesh::VertexHandle v = a.add_vertex(vec3ToPoint(pt));
                         insertedVerts[v] = true;
 //                        insertedVertsOrder.push_back(v);
-                        a.split_edge(hehIt->edge(), v);
+//                        a.split_edge(hehIt->edge(), v);
                     }
                 }
             }
