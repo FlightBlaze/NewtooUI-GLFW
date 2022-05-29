@@ -66,6 +66,11 @@ void loopCut(PolyMesh& mesh, bool debug = false);
 void openRegion(PolyMesh& mesh, bool debug = false);
 void bevel(PolyMesh& mesh, int segments = 0, float radius = 30.0f, bool debug = false);
 
+bool rayTriangleIntersect(
+    const glm::vec3 &orig, const glm::vec3 &dir,
+    const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2,
+    float &t);
+
 enum class CurrentTransform {
     None,
     Move,

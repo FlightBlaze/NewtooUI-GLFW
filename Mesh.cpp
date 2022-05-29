@@ -1280,22 +1280,143 @@ PolyMesh::FaceHandle copyFace(PolyMesh::FaceHandle fh, PolyMesh& mesh) {
     return copyFh;
 }
 
-struct LineSeg {
+struct TriTriIntersect {
     glm::vec3 a, b;
     bool intersects = false;
 };
 
-LineSeg triTriIntersect(PolyMesh::FaceHandle triA, PolyMesh::FaceHandle triB) {
-    return LineSeg();
+struct TrianglePoints {
+    glm::vec3 a, b, c;
+};
+
+TrianglePoints getTrianglePoints(PolyMesh::FaceHandle fh, PolyMesh& mesh) {
+    TrianglePoints points;
+    std::vector<glm::vec3> pointsVec;
+    for(auto fvh : mesh.fv_cw_range(fh))
+        pointsVec.push_back(vec3FromPoint(mesh.point(fvh)));
+    points.a = pointsVec[0];
+    points.b = pointsVec[1];
+    points.c = pointsVec[2];
+    return points;
 }
 
-LineSeg faceFaceIntersect(PolyMesh::FaceHandle faceA, PolyMesh& meshA,
+// https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
+bool rayTriangleIntersect(
+    const glm::vec3 &orig, const glm::vec3 &dir,
+    const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2,
+    float &t)
+{
+    // compute plane's normal
+    glm::vec3 v0v1 = v1 - v0;
+    glm::vec3 v0v2 = v2 - v0;
+    // no need to normalize
+    glm::vec3 N = glm::cross(v0v1, v0v2);  //N
+    float area2 = glm::length(N);
+ 
+    // Step 1: finding P
+ 
+    // check if ray and plane are parallel ?
+    float NdotRayDirection = glm::dot(N, dir);
+    if (fabs(NdotRayDirection) < 0.0001f)  //almost 0
+        return false;  //they are parallel so they don't intersect !
+ 
+    // compute d parameter using equation 2
+    float d = glm::dot(-N, v0);
+ 
+    // compute t (equation 3)
+    t = -(glm::dot(N, orig) + d) / NdotRayDirection;
+ 
+    // check if the triangle is in behind the ray
+    if (t < 0.0f) return false;  //the triangle is behind
+ 
+    // compute the intersection point using equation 1
+    glm::vec3 P = orig + t * dir;
+ 
+    // Step 2: inside-outside test
+    glm::vec3 C;  //vector perpendicular to triangle's plane
+ 
+    // edge 0
+    glm::vec3 edge0 = v1 - v0;
+    glm::vec3 vp0 = P - v0;
+    C = glm::cross(edge0, vp0);
+    if (glm::dot(N, C) < 0) return false;  //P is on the right side
+ 
+    // edge 1
+    glm::vec3 edge1 = v2 - v1;
+    glm::vec3 vp1 = P - v1;
+    C = glm::cross(edge1, vp1);
+    if (glm::dot(N, C) < 0)  return false;  //P is on the right side
+ 
+    // edge 2
+    glm::vec3 edge2 = v0 - v2;
+    glm::vec3 vp2 = P - v2;
+    C = glm::cross(edge2, vp2);
+    if (glm::dot(N, C) < 0) return false;  //P is on the right side;
+ 
+    return true;  //this ray hits the triangle
+}
+
+struct RayTriFromLine {
+    glm::vec3 orig, dir;
+    TrianglePoints& tri;
+    RayTriFromLine(glm::vec3 a, glm::vec3 b, TrianglePoints& tri): tri(tri), orig(a) {
+        b = glm::normalize(b - a);
+    }
+};
+
+TriTriIntersect triTriIntersect(TrianglePoints triA, TrianglePoints triB) {
+    std::vector<glm::vec3> points;
+    std::array<RayTriFromLine, 6> rays = {
+        RayTriFromLine(triA.a, triA.b, triB),
+        RayTriFromLine(triA.a, triA.c, triB),
+        RayTriFromLine(triA.b, triA.c, triB),
+        RayTriFromLine(triB.a, triB.b, triA),
+        RayTriFromLine(triB.a, triB.c, triA),
+        RayTriFromLine(triB.b, triB.c, triA)
+    };
+    for(auto& ray : rays) {
+        float t = 0;
+        if(rayTriangleIntersect(ray.orig, ray.dir, ray.tri.a, ray.tri.b, ray.tri.c, t))
+            points.push_back(ray.orig + ray.dir * t);
+    }
+    TriTriIntersect inter;
+    if(points.size() == 2) {
+        inter.intersects = true;
+        inter.a = points[0];
+        inter.b = points[1];
+    }
+    return inter;
+}
+
+struct LineSeg {
+    glm::vec3 a, b;
+};
+
+std::list<LineSeg> faceFaceIntersect(PolyMesh::FaceHandle faceA, PolyMesh& meshA,
                           PolyMesh::FaceHandle faceB, PolyMesh& meshB) {
     PolyMesh::FaceHandle copyFaceA = copyFace(faceA, meshA);
     std::vector<PolyMesh::FaceHandle> aTris = triangulateFace(copyFaceA, meshA);
+    PolyMesh::FaceHandle copyFaceB = copyFace(faceB, meshB);
+    std::vector<PolyMesh::FaceHandle> bTris = triangulateFace(copyFaceB, meshB);
+    std::list<LineSeg> segs;
+    for(auto triA : aTris) {
+        TrianglePoints triPtsA = getTrianglePoints(triA, meshA);
+        for(auto triB : bTris) {
+            TrianglePoints triPtsB = getTrianglePoints(triB, meshB);
+            TriTriIntersect intersect = triTriIntersect(triPtsA, triPtsB);
+            if(intersect.intersects) {
+                LineSeg seg;
+                seg.a = intersect.a;
+                seg.b = intersect.b;
+                segs.push_back(seg);
+            }
+        }
+    }
     for(auto tri : aTris)
         meshA.delete_face(tri);
-    return LineSeg();
+    for(auto tri : bTris)
+        meshB.delete_face(tri);
+    return segs;
 }
 
 struct LineSegI {
@@ -1327,14 +1448,33 @@ bool isPointLyingOnTriangle(glm::vec3 point, glm::vec3 v1, glm::vec3 v2, glm::ve
     return offset < threshold;
 }
 
+bool isPointLyingOnFace(glm::vec3 point, PolyMesh::FaceHandle fh, PolyMesh& mesh) {
+    PolyMesh::FaceHandle copyFh = copyFace(fh, mesh);
+    std::vector<PolyMesh::FaceHandle> tris = triangulateFace(copyFh, mesh);
+    for(auto tri : tris) {
+        std::vector<glm::vec3> triPoints;
+        triPoints.reserve(3);
+        for(auto fvh : mesh.fv_range(tri))
+            triPoints.push_back(vec3FromPoint(mesh.point(fvh)));
+        if(isPointLyingOnTriangle(point, triPoints[0], triPoints[1], triPoints[2])) {
+            for(auto tri : tris)
+                mesh.delete_face(tri);
+            return true;
+        }
+    }
+    for(auto tri : tris)
+        mesh.delete_face(tri);
+    return false;
+}
+
 struct FaceCutting {
 //    PolyMesh::FaceHandle face;
-    std::list<glm::vec3> points;
+    std::list<PolyMesh::VertexHandle> verts;
 };
 
 struct TwoFacesVerts {
-    std::list<PolyMesh::VertexHandle> first;
-    std::list<PolyMesh::VertexHandle> second;
+    std::vector<PolyMesh::VertexHandle> first;
+    std::vector<PolyMesh::VertexHandle> second;
 };
 
 TwoFacesVerts cutFace(std::list<PolyMesh::VertexHandle> verts, PolyMesh::FaceHandle fh, PolyMesh& mesh) {
@@ -1469,8 +1609,8 @@ void intersection(PolyMesh& a, PolyMesh& b) {
     for(auto faceA : a.faces()) {
         // TODO: replace with BVH traversal
         for(auto faceB : b.faces()) {
-            LineSeg seg = faceFaceIntersect(faceA, a, faceB, b);
-            if(seg.intersects) {
+            auto segList = faceFaceIntersect(faceA, a, faceB, b);
+            for(auto seg : segList) {
                 segs.push_back(LineSegI(seg.a, seg.b, faceA, faceB));
             }
         }
@@ -1488,42 +1628,42 @@ void intersection(PolyMesh& a, PolyMesh& b) {
 //            }
 //        }
 //    }
+    std::list<FaceCutting> faceCutting;
     for(LineSegI head : pathHeads) {
-        std::unordered_map<PolyMesh::VertexHandle, bool> insertedVerts;
-//        std::list<PolyMesh::VertexHandle> insertedVertsOrder;
-        int pointOnSegmentCount = 0;
         LineSegI* cur = &head;
+        PolyMesh::FaceHandle curFace = PolyMesh::InvalidFaceHandle;
         while(cur != nullptr) {
-            for(auto hehIt = a.fh_cwiter(cur->face1); hehIt.is_valid(); hehIt++) {
-                glm::vec3 start = vec3FromPoint(a.point(a.from_vertex_handle(*hehIt)));
-                glm::vec3 end = vec3FromPoint(a.point(a.to_vertex_handle(*hehIt)));
-                std::array<glm::vec3, 2> segPoints = { cur->v1, cur->v2 };
-                for(glm::vec3 pt : segPoints) {
-                    if(isPointLyingOnSegment(pt, start, end)) {
-                        pointOnSegmentCount++;
-                        PolyMesh::VertexHandle v = a.add_vertex(vec3ToPoint(pt));
-                        insertedVerts[v] = true;
-//                        insertedVertsOrder.push_back(v);
-//                        a.split_edge(hehIt->edge(), v);
-                    }
-                }
+            if(cur->face1 != curFace) {
+                curFace = cur->face1;
+                FaceCutting fc;
+                fc.verts.push_back(a.add_vertex(vec3ToPoint(cur->v1)));
+                faceCutting.push_back(fc);
             }
+            faceCutting.back().verts.push_back(a.add_vertex(vec3ToPoint(cur->v2)));
             cur = cur->next;
         }
-        std::vector<PolyMesh::VertexHandle> newFaceVerts;
-        PolyMesh::VertexHandle end = PolyMesh::InvalidVertexHandle;
-        for(auto vhIt = a.fv_cwiter(cur->face1); vhIt.is_valid(); vhIt++) {
-            if(insertedVerts[*vhIt]) {
-                if(*vhIt == end) {
-                    end = PolyMesh::InvalidVertexHandle;
-                }
-                
-            } else if(end == PolyMesh::InvalidVertexHandle) {
-                newFaceVerts.push_back(*vhIt);
+    }
+    for(auto& cut : faceCutting) {
+        glm::vec3 centroid = glm::vec3(0.0f);
+        for(auto vh : cut.verts) {
+            centroid += vec3FromPoint(a.point(vh));
+        }
+        centroid /= cut.verts.size();
+        PolyMesh::FaceHandle fh = PolyMesh::InvalidFaceHandle;
+        for(auto faceA : a.faces()) {
+            if(isPointLyingOnFace(centroid, faceA, a)) {
+                fh = faceA;
+                break;
             }
         }
-        a.delete_face(cur->face1);
-        a.add_face(newFaceVerts);
+        assert(fh != PolyMesh::InvalidFaceHandle);
+        PolyMesh::Point faceNormal = a.normal(fh);
+        auto newFacesVerts = cutFace(cut.verts, fh, a);
+        a.delete_face(fh);
+        auto newFace1 = a.add_face(newFacesVerts.first);
+        auto newFace2 = a.add_face(newFacesVerts.second);
+        a.set_normal(newFace1, faceNormal);
+        a.set_normal(newFace2, faceNormal);
     }
 }
 
