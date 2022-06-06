@@ -71,7 +71,7 @@ bool rayTriangleIntersect(
     const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2,
     float &t);
 
-void intersectMeshes(PolyMesh& a, PolyMesh& b);
+void intersectMeshesOld(PolyMesh& a, PolyMesh& b);
 
 enum class CurrentTransform {
     None,
@@ -92,3 +92,76 @@ public:
     
     void draw(bvg::Context& ctx, bool isMouseDown, float mouseX, float mouseY);
 };
+
+struct CSGPolygon;
+struct BSPNode;
+
+struct CSGPlane {
+    glm::vec3 normal;
+    float w;
+  
+    static constexpr float Threshold = 1e-5;
+    
+    CSGPlane(glm::vec3 normal, float w);
+    CSGPlane(glm::vec3 a, glm::vec3 b, glm::vec3 c);
+    
+    void splitPolygon(CSGPolygon& polygon,
+                      std::list<CSGPolygon>& coplanarFront,
+                      std::list<CSGPolygon>& coplanarBack,
+                      std::list<CSGPolygon>& front,
+                      std::list<CSGPolygon>& back);
+    void flip();
+};
+
+//struct CSGSharedProps {
+//
+//};
+
+struct CSGVertex {
+    glm::vec3 pos, normal;
+//    CSGSharedProps shared;
+    
+    struct DeleteInfo {
+        int numUsers = 0;
+    };
+    DeleteInfo deleteInfo;
+    PolyMesh::VertexHandle vh = PolyMesh::InvalidVertexHandle;
+    
+    CSGVertex* lerp(CSGVertex& other, float t);
+    void flipNormal();
+};
+
+struct CSGPolygon {
+    CSGPlane plane;
+    std::vector<CSGVertex*> verts;
+    
+    CSGPolygon(std::vector<CSGVertex*>& verts);
+    void flip();
+    
+    static std::list<CSGPolygon> extractFromMesh(PolyMesh& mesh);
+    static PolyMesh toMesh(std::list<CSGPolygon> polygons);
+};
+
+struct BSPNode {
+    CSGPlane* plane = nullptr;
+    BSPNode* front = nullptr;
+    BSPNode* back = nullptr;
+    std::list<CSGPolygon> polygons;
+    
+    BSPNode();
+    BSPNode(std::list<CSGPolygon>& polygons);
+    std::list<CSGPolygon> allPolygons();
+    std::list<CSGPolygon> clipPolygons(std::list<CSGPolygon>& polygons);
+    void clipTo(BSPNode* node);
+    void invert();
+    void build(std::list<CSGPolygon>& polygons);
+    
+    static BSPNode* fromMesh(PolyMesh& mesh);
+    static void deepDelete(std::list<BSPNode*> roots);
+};
+
+void unionBSP(BSPNode* a, BSPNode* b);
+void subtractBSP(BSPNode* a, BSPNode* b);
+void intersectBSP(BSPNode* a, BSPNode* b);
+
+PolyMesh subtractMeshes(PolyMesh& a, PolyMesh& b);

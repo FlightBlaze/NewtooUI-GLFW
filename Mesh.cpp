@@ -464,6 +464,8 @@ std::list<PolyMesh::HalfedgeHandle> getRingHalfedges(PolyMesh::HalfedgeHandle he
         if(he.is_boundary()) {
             break;
         }
+        if(he.face().valence() != 4)
+            break;
         he = he.next().next().opp();
     } while (he != start);
     
@@ -477,6 +479,8 @@ std::list<PolyMesh::HalfedgeHandle> getRingHalfedges(PolyMesh::HalfedgeHandle he
         if(he.is_boundary()) {
             break;
         }
+        if(he.face().valence() != 4)
+            break;
         ring.push_front(he);
         knownHalfedges[he] = true;
         mesh.status(he).set_selected(true);
@@ -522,6 +526,9 @@ void loopCut(PolyMesh& mesh, bool debug) {
         return;
     }
     
+    for(auto vh : selVerts)
+        mesh.status(vh).set_selected(false);
+    
     std::vector<PolyMesh::VertexHandle> A, B, C;
     
     for (auto he : ring) {
@@ -532,16 +539,29 @@ void loopCut(PolyMesh& mesh, bool debug) {
         B.push_back(mesh.add_vertex(mean));
         C.push_back(to);
     }
-    // To connect start with end
-    A.push_back(A.front());
-    B.push_back(B.front());
-    C.push_back(C.front());
     
+    bool doConnectStartWithEnd = true;
     for (auto he : ring) {
         PolyMesh::FaceHandle face = mesh.face_handle(he);
         if(face != PolyMesh::InvalidFaceHandle) {
-            mesh.delete_face(face, false);
+            if(mesh.valence(face) == 4)
+                mesh.delete_face(face, false);
+            else
+                doConnectStartWithEnd = false;
         }
+    }
+    
+    if(doConnectStartWithEnd) {
+        // To connect start with end
+        A.push_back(A.front());
+        B.push_back(B.front());
+        C.push_back(C.front());
+    } else {
+        // Split ends of ring
+        OpenMesh::SmartHalfedgeHandle startHeh = OpenMesh::make_smart(ring.front(), mesh);
+        mesh.split_edge(startHeh.edge(), B.front());
+        OpenMesh::SmartHalfedgeHandle endHeh = OpenMesh::make_smart(ring.back(), mesh);
+        mesh.split_edge(endHeh.edge(), B.back());
     }
     
 //    return;
@@ -568,9 +588,6 @@ void loopCut(PolyMesh& mesh, bool debug) {
         };
         mesh.add_face(face);
     }
-    
-    for(auto vh : selVerts)
-        mesh.status(vh).set_selected(false);
     
     for(auto vh : B)
         mesh.status(vh).set_selected(true);
@@ -1360,7 +1377,7 @@ struct RayTriFromLine {
     glm::vec3 orig, dir;
     TrianglePoints& tri;
     RayTriFromLine(glm::vec3 a, glm::vec3 b, TrianglePoints& tri): tri(tri), orig(a) {
-        b = glm::normalize(b - a);
+        dir = glm::normalize(b - a);
     }
 };
 
@@ -1448,7 +1465,8 @@ bool isPointLyingOnTriangle(glm::vec3 point, glm::vec3 v1, glm::vec3 v2, glm::ve
     return offset < threshold;
 }
 
-bool isPointLyingOnFace(glm::vec3 point, PolyMesh::FaceHandle fh, PolyMesh& mesh) {
+bool isPointLyingOnFace(glm::vec3 point, PolyMesh::FaceHandle fh, PolyMesh& mesh,
+                        float threshold = 0.01f) {
     PolyMesh::FaceHandle copyFh = copyFace(fh, mesh);
     std::vector<PolyMesh::FaceHandle> tris = triangulateFace(copyFh, mesh);
     for(auto tri : tris) {
@@ -1456,7 +1474,7 @@ bool isPointLyingOnFace(glm::vec3 point, PolyMesh::FaceHandle fh, PolyMesh& mesh
         triPoints.reserve(3);
         for(auto fvh : mesh.fv_range(tri))
             triPoints.push_back(vec3FromPoint(mesh.point(fvh)));
-        if(isPointLyingOnTriangle(point, triPoints[0], triPoints[1], triPoints[2])) {
+        if(isPointLyingOnTriangle(point, triPoints[0], triPoints[1], triPoints[2]), threshold) {
             for(auto tri : tris)
                 mesh.delete_face(tri);
             return true;
@@ -1485,7 +1503,7 @@ TwoFacesVerts cutFace(std::list<PolyMesh::VertexHandle> verts, PolyMesh::FaceHan
     int pointLyingOnFaceSideCount = 0;
     glm::vec3 firstPoint = vec3FromPoint(mesh.point(verts.front()));
     glm::vec3 lastPoint = vec3FromPoint(mesh.point(verts.back()));
-    for(auto hehIt = mesh.fh_cwiter(fh); hehIt.is_valid(); hehIt++) {
+    for(auto hehIt = mesh.fh_ccwiter(fh); hehIt.is_valid(); hehIt++) {
         glm::vec3 start = vec3FromPoint(mesh.point(mesh.from_vertex_handle(*hehIt)));
         glm::vec3 end = vec3FromPoint(mesh.point(mesh.to_vertex_handle(*hehIt)));
         faceVerts.push_back(mesh.from_vertex_handle(*hehIt));
@@ -1522,7 +1540,7 @@ TwoFacesVerts cutFace(std::list<PolyMesh::VertexHandle> verts, PolyMesh::FaceHan
     }
     gotHalfVert = false;
     popTimes = 0;
-    for(PolyMesh::VertexHandle p : vertsForward) {
+    for(PolyMesh::VertexHandle p : vertsBackward) {
         if(gotHalfVert) {
             popTimes++;
         } else {
@@ -1567,7 +1585,7 @@ TwoFacesVerts cutFace(std::list<PolyMesh::VertexHandle> verts, PolyMesh::FaceHan
         if(ind == startInd)
             break;
         if(ind == endInd) {
-            for(auto it = vertsBackward.begin(); it != verts.end(); it++) {
+            for(auto it = vertsBackward.begin(); it != vertsBackward.end(); it++) {
                 twoFaces.first.push_back(*it);
             }
             break;
@@ -1582,7 +1600,7 @@ TwoFacesVerts cutFace(std::list<PolyMesh::VertexHandle> verts, PolyMesh::FaceHan
         if(ind == endInd)
             break;
         if(ind == startInd) {
-            for(auto it = vertsForward.begin(); it != verts.end(); it++) {
+            for(auto it = vertsForward.begin(); it != vertsForward.end(); it++) {
                 twoFaces.second.push_back(*it);
             }
             break;
@@ -1603,20 +1621,34 @@ TwoFacesVerts cutFace(std::list<PolyMesh::VertexHandle> verts, PolyMesh::FaceHan
 // 5. Разрезать пересекающиеся грани вдоль пути пересечения. Если
 //    пути пересечения не имеют точек, лежащих на границе грани,
 //    то разрезать грань пополам с добавлением вершин пересечения.
-void intersectMeshes(PolyMesh& a, PolyMesh& b) {
+void intersectMeshesOld(PolyMesh& a, PolyMesh& b) {
     std::list<LineSegI> segs;
     std::list<LineSegI*> pathHeads;
     // 1.
+    std::list<std::pair<PolyMesh::FaceHandle, PolyMesh::FaceHandle>> faces;
+    std::list<PolyMesh::FaceHandle> aFaces;
+    for(auto faceA : a.faces())
+        aFaces.push_back(faceA);
     for(auto faceA : a.faces()) {
         // TODO: replace with BVH traversal
         for(auto faceB : b.faces()) {
-            auto segList = faceFaceIntersect(faceA, a, faceB, b);
-            for(auto seg : segList) {
-                segs.push_back(LineSegI(a.add_vertex(vec3ToPoint(seg.a)),
-                                        a.add_vertex(vec3ToPoint(seg.b)), faceA, faceB));
-            }
+            faces.push_back(std::make_pair(faceA, faceB));
         }
     }
+    for(auto pair : faces) {
+        auto faceA = pair.first;
+        auto faceB = pair.second;
+        auto segList = faceFaceIntersect(faceA, a, faceB, b);
+        for(auto seg : segList) {
+            segs.push_back(LineSegI(a.add_vertex(vec3ToPoint(seg.a)),
+                                    a.add_vertex(vec3ToPoint(seg.b)), faceA, faceB));
+        }
+    }
+//    std::list<std::pair<glm::vec3, int>> cutPositions;
+//    for(auto& seg : segs) {
+//        cutPositions.push_back(std::make_pair(vec3FromPoint(a.point(seg.v1)), seg.v1.idx()));
+//        cutPositions.push_back(std::make_pair(vec3FromPoint(a.point(seg.v2)), seg.v2.idx()));
+//    }
     // 2.
     float threshold = 0.0001f;
     std::unordered_map<int, std::vector<LineSegI*>> verts;
@@ -1704,7 +1736,7 @@ void intersectMeshes(PolyMesh& a, PolyMesh& b) {
     for(LineSegI* head : pathHeads) {
         LineSegI* cur = head;
         PolyMesh::FaceHandle curFace = PolyMesh::InvalidFaceHandle;
-        while(cur != nullptr) {
+        do {
             if(cur->face1 != curFace) {
                 curFace = cur->face1;
                 FaceCutting fc;
@@ -1714,6 +1746,7 @@ void intersectMeshes(PolyMesh& a, PolyMesh& b) {
             faceCutting.back().verts.push_back(cur->v2);
             cur = cur->next;
         }
+        while(cur != nullptr && cur != head);
     }
     for(auto& cut : faceCutting) {
         glm::vec3 centroid = glm::vec3(0.0f);
@@ -1722,20 +1755,22 @@ void intersectMeshes(PolyMesh& a, PolyMesh& b) {
         }
         centroid /= cut.verts.size();
         PolyMesh::FaceHandle fh = PolyMesh::InvalidFaceHandle;
-        for(auto faceA : a.faces()) {
+        for(auto faceA : aFaces) {
             if(isPointLyingOnFace(centroid, faceA, a)) {
                 fh = faceA;
                 break;
             }
         }
         assert(fh != PolyMesh::InvalidFaceHandle);
+        if(!fh.is_valid() || a.status(fh).deleted())
+            continue;
         PolyMesh::Point faceNormal = a.normal(fh);
         auto newFacesVerts = cutFace(cut.verts, fh, a);
         a.delete_face(fh);
         auto newFace1 = a.add_face(newFacesVerts.first);
         auto newFace2 = a.add_face(newFacesVerts.second);
-        a.set_normal(newFace1, faceNormal);
-        a.set_normal(newFace2, faceNormal);
+//        a.set_normal(newFace1, faceNormal);
+//        a.set_normal(newFace2, faceNormal);
     }
 }
 
@@ -1890,4 +1925,334 @@ void MeshViewer2D::draw(bvg::Context& ctx, bool isMouseDown, float mouseX, float
     }
     lastMouseX = mouseX;
     lastMouseY = mouseY;
+}
+
+CSGPlane::CSGPlane(glm::vec3 normal, float w):
+    normal(normal), w(w) {}
+
+CSGPlane::CSGPlane(glm::vec3 a, glm::vec3 b, glm::vec3 c) {
+    glm::vec3 n = glm::normalize(glm::cross(b - a, c - a));
+    this->w = glm::dot(n, a);
+    this->normal = n;
+}
+
+void CSGPlane::flip() {
+    this->normal = -this->normal;
+    this->w = -this->w;
+}
+
+void CSGPlane::splitPolygon(CSGPolygon& polygon,
+                  std::list<CSGPolygon>& coplanarFront,
+                  std::list<CSGPolygon>& coplanarBack,
+                  std::list<CSGPolygon>& front,
+                  std::list<CSGPolygon>& back) {
+    static constexpr int Coplanar = 0;
+    static constexpr int Front = 1;
+    static constexpr int Back = 2;
+    static constexpr int Spanning = 3;
+    int polygonType = 0;
+    std::vector<int> vertTypes;
+    for (int i = 0; i < polygon.verts.size(); i++) {
+        // Distance from the plane to the vertex
+        float t = glm::dot(this->normal, polygon.verts[i]->pos) - this->w;
+        int type = (t < -Threshold) ? Back : (t < Threshold) ? Coplanar : Front;
+        // Bitwise OR gives us number 3 (Spanning)
+        // on numbers 1 and 2 or vice versa
+        polygonType |= type;
+        vertTypes.push_back(type);
+    }
+    switch (polygonType) {
+        case Coplanar:
+            if (glm::dot(this->normal, polygon.plane.normal) > 0.0f)
+                coplanarFront.push_back(polygon);
+            else
+                coplanarBack.push_back(polygon);
+            break;
+        case Front:
+            front.push_back(polygon);
+            break;
+        case Back:
+            back.push_back(polygon);
+            break;
+        case Spanning:
+        {
+            int numVerts = polygon.verts.size();
+            std::vector<CSGVertex*> toFront, toBack, toFrontNew, toBackNew;
+            toFrontNew.reserve(numVerts);
+            toFront.reserve(numVerts);
+            toBackNew.reserve(numVerts);
+            toBack.reserve(numVerts);
+            for (int i = 0; i < numVerts; i++) {
+                int j = (i + 1) % numVerts;
+                int currentType = vertTypes[i];
+                int nextType = vertTypes[j];
+                CSGVertex* currentVert = polygon.verts[i];
+                CSGVertex* nextVert = polygon.verts[j];
+                if(currentType != Back)
+                    toFront.push_back(currentVert);
+                if(currentType != Front)
+                    toBack.push_back(currentType != Back ?
+                                     new CSGVertex(*currentVert) :
+                                     currentVert);
+                if((currentType | nextType) == Spanning) {
+                    float d1 = this->w - glm::dot(this->normal,
+                                                  currentVert->pos);
+                    float d2 = glm::dot(this->normal,
+                                        nextVert->pos - currentVert->pos);
+                    float t = d1 / d2;
+                    CSGVertex* v1 = currentVert->lerp(*nextVert, t);
+                    toFrontNew.push_back(v1);
+                    toFront.push_back(v1);
+                    CSGVertex* v2 = new CSGVertex(*v1);
+                    toBackNew.push_back(v2);
+                    toBack.push_back(v2);
+                }
+            }
+            if(toFront.size() >= 3)
+                front.push_back(CSGPolygon(toFront));
+            else {
+                for(auto* v : toFrontNew)
+                    delete v;
+            }
+            if(toBack.size() >= 3)
+                back.push_back(CSGPolygon(toBack));
+            else {
+                for(auto* v : toBackNew)
+                    delete v;
+            }
+        }
+            break;
+        default:
+            break;
+    }
+}
+
+CSGVertex* CSGVertex::lerp(CSGVertex& other, float t) {
+    CSGVertex *v = new CSGVertex();
+    v->pos = glm::mix(this->pos, other.pos, t);
+    v->normal = glm::mix(this->normal, other.normal, t);
+    return v;
+}
+
+void CSGVertex::flipNormal() {
+    this->normal = -this->normal;
+}
+
+CSGPolygon::CSGPolygon(std::vector<CSGVertex*>& verts):
+    verts(verts), plane(verts[0]->pos, verts[1]->pos, verts[2]->pos) {}
+
+void CSGPolygon::flip() {
+    std::reverse(this->verts.begin(), this->verts.end());
+}
+
+std::list<CSGPolygon> CSGPolygon::extractFromMesh(PolyMesh& mesh) {
+    std::list<CSGPolygon> polygons;
+    std::unordered_map<int, CSGVertex*> vertices;
+    for(auto vh : mesh.vertices()) {
+        CSGVertex* cv = new CSGVertex();
+        cv->pos = vec3FromPoint(mesh.point(vh));
+        cv->normal = vec3FromPoint(mesh.normal(vh));
+        vertices[vh.idx()] = cv;
+    }
+    for(auto fh : mesh.faces()) {
+        std::vector<CSGVertex*> verts;
+        verts.reserve(fh.valence());
+        for(auto fvh : fh.vertices_cw()) {
+            verts.push_back(vertices[fvh.idx()]);
+        }
+        polygons.push_back(CSGPolygon(verts));
+    }
+    return polygons;
+}
+
+PolyMesh CSGPolygon::toMesh(std::list<CSGPolygon> polygons) {
+    PolyMesh mesh;
+    mesh.request_face_status();
+    mesh.request_edge_status();
+    mesh.request_halfedge_status();
+    mesh.request_vertex_status();
+    mesh.request_halfedge_texcoords2D();
+    mesh.request_vertex_texcoords2D();
+    mesh.request_vertex_normals();
+    mesh.request_vertex_colors();
+    mesh.request_face_normals();
+    for(auto poly : polygons) {
+        std::vector<PolyMesh::VertexHandle> verts;
+        verts.reserve(poly.verts.size());
+        for(auto vert : poly.verts) {
+            if(vert->vh == PolyMesh::InvalidVertexHandle) {
+                vert->vh = mesh.add_vertex(vec3ToPoint(vert->pos));
+                mesh.set_normal(vert->vh, vec3ToPoint(vert->normal));
+            }
+            verts.push_back(vert->vh);
+        }
+        PolyMesh::FaceHandle fh = mesh.add_face(verts);
+        mesh.set_normal(fh, vec3ToPoint(poly.plane.normal));
+    }
+    return mesh;
+}
+
+BSPNode::BSPNode() {}
+
+BSPNode::BSPNode(std::list<CSGPolygon>& polygons) {
+    this->build(polygons);
+}
+
+std::list<CSGPolygon> BSPNode::allPolygons() {
+    std::list<CSGPolygon> polygons = this->polygons;
+    if(this->front != nullptr) {
+        std::list<CSGPolygon> frontPolygons = this->front->allPolygons();
+        polygons.insert(polygons.begin(), frontPolygons.begin(),
+                        frontPolygons.end());
+    }
+    if(this->back != nullptr) {
+        std::list<CSGPolygon> backPolygons = this->back->allPolygons();
+        polygons.insert(polygons.begin(), backPolygons.begin(),
+                        backPolygons.end());
+    }
+    return polygons;
+}
+
+std::list<CSGPolygon> BSPNode::clipPolygons(std::list<CSGPolygon> &polygons) {
+    if (!this->plane)
+        return polygons;
+    std::list<CSGPolygon> toFront, toBack;
+    for (auto& poly : polygons) {
+        this->plane->splitPolygon(poly, toFront, toBack, toFront, toBack);
+    }
+    if(this->front != nullptr)
+        toFront = this->front->clipPolygons(toFront);
+    if(this->back != nullptr)
+        toBack = this->back->clipPolygons(toBack);
+    else
+        toBack = {};
+    std::list<CSGPolygon> combined;
+    combined.insert(combined.end(), toFront.begin(), toFront.end());
+    combined.insert(combined.end(), toBack.begin(), toBack.end());
+    return combined;
+}
+
+void BSPNode::clipTo(BSPNode* node) {
+    this->polygons = node->clipPolygons(this->polygons);
+    if(this->front != nullptr)
+        this->front->clipTo(node);
+    if(this->back != nullptr)
+        this->back->clipTo(node);
+}
+
+void BSPNode::invert() {
+    for(auto poly : this->polygons) {
+        poly.flip();
+    }
+    this->plane->flip();
+    if(this->front != nullptr)
+        this->front->invert();
+    if(this->back != nullptr)
+        this->back->invert();
+    BSPNode* front = this->front;
+    this->front = this->back;
+    this->back = front;
+}
+
+void BSPNode::build(std::list<CSGPolygon>& polygons) {
+    if(polygons.empty())
+        return;
+    if(this->plane == nullptr)
+        this->plane = new CSGPlane(polygons.front().plane);
+    std::list<CSGPolygon> toFront, toBack;
+    for (auto& poly : polygons) {
+        this->plane->splitPolygon(poly, this->polygons, this->polygons,
+                                  toFront, toBack);
+    }
+    if(!toFront.empty()) {
+        if(this->front == nullptr)
+            this->front = new BSPNode();
+        this->front->build(toFront);
+    }
+    if(!toBack.empty()) {
+        if(this->back == nullptr)
+            this->back = new BSPNode();
+        this->back->build(toBack);
+    }
+}
+
+BSPNode* BSPNode::fromMesh(PolyMesh& mesh) {
+    std::list<CSGPolygon> polygons = CSGPolygon::extractFromMesh(mesh);
+    return new BSPNode(polygons);
+}
+
+void countReferencesInBSPNode(BSPNode* node) {
+    if(node == nullptr)
+        return;
+    for(auto poly : node->polygons) {
+        for(auto *vert : poly.verts)
+            vert->deleteInfo.numUsers++;
+    }
+    countReferencesInBSPNode(node->front);
+    countReferencesInBSPNode(node->back);
+}
+
+void deleteRecursivelyBSPNode(BSPNode* node) {
+    if(node == nullptr)
+        return;
+    delete node->plane;
+    for(auto poly : node->polygons) {
+        for(auto *vert : poly.verts) {
+            vert->deleteInfo.numUsers--;
+            if(vert->deleteInfo.numUsers == 0)
+                delete vert;
+        }
+    }
+    deleteRecursivelyBSPNode(node->front);
+    deleteRecursivelyBSPNode(node->back);
+    delete node;
+}
+
+void BSPNode::deepDelete(std::list<BSPNode*> roots) {
+    for (BSPNode* root : roots)
+        countReferencesInBSPNode(root);
+    for (BSPNode* root : roots)
+        deleteRecursivelyBSPNode(root);
+}
+
+void unionBSP(BSPNode* a, BSPNode* b) {
+    a->clipTo(b);
+    b->clipTo(a);
+    b->invert();
+    b->clipTo(a);
+    b->invert();
+    auto bpoly = b->allPolygons();
+    a->build(bpoly);
+}
+
+void subtractBSP(BSPNode* a, BSPNode* b) {
+    a->invert();
+    a->clipTo(b);
+    b->clipTo(a);
+    b->invert();
+    b->clipTo(a);
+    b->invert();
+    auto bpoly = b->allPolygons();
+    a->build(bpoly);
+    a->invert();
+}
+
+void intersectBSP(BSPNode* a, BSPNode* b) {
+    a->invert();
+    b->clipTo(a);
+    b->invert();
+    a->clipTo(b);
+    b->clipTo(a);
+    auto bpoly = b->allPolygons();
+    a->build(bpoly);
+    a->invert();
+}
+
+PolyMesh subtractMeshes(PolyMesh& a, PolyMesh& b) {
+    BSPNode* bspA = BSPNode::fromMesh(a);
+    BSPNode* bspB = BSPNode::fromMesh(b);
+    subtractBSP(bspA, bspB);
+    PolyMesh mesh = CSGPolygon::toMesh(bspA->allPolygons());
+    BSPNode::deepDelete({bspA, bspB});
+    return mesh;
 }
