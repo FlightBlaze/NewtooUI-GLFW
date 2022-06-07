@@ -94,7 +94,10 @@ public:
 };
 
 struct CSGPolygon;
+struct CSGVertex;
 struct BSPNode;
+
+static std::map<std::pair<CSGVertex*, CSGVertex*>, CSGVertex*> edgeSplits;
 
 struct CSGPlane {
     glm::vec3 normal;
@@ -126,6 +129,7 @@ struct CSGVertex {
     };
     DeleteInfo deleteInfo;
     PolyMesh::VertexHandle vh = PolyMesh::InvalidVertexHandle;
+    bool isNew = false;
     
     CSGVertex* lerp(CSGVertex& other, float t);
     void flipNormal();
@@ -165,3 +169,5 @@ void subtractBSP(BSPNode* a, BSPNode* b);
 void intersectBSP(BSPNode* a, BSPNode* b);
 
 PolyMesh subtractMeshes(PolyMesh& a, PolyMesh& b);
+
+void postProcessBooleanMesh(PolyMesh& mesh);

@@ -1990,10 +1990,14 @@ void CSGPlane::splitPolygon(CSGPolygon& polygon,
                 CSGVertex* nextVert = polygon.verts[j];
                 if(currentType != Back)
                     toFront.push_back(currentVert);
-                if(currentType != Front)
-                    toBack.push_back(currentType != Back ?
-                                     new CSGVertex(*currentVert) :
-                                     currentVert);
+                if(currentType != Front) {
+                    if(currentType != Back) {
+                        CSGVertex* v = new CSGVertex(*currentVert);
+                        v->isNew = true;
+                        toBack.push_back(v);
+                    } else
+                        toBack.push_back(currentVert);
+                }
                 if((currentType | nextType) == Spanning) {
                     float d1 = this->w - glm::dot(this->normal,
                                                   currentVert->pos);
@@ -2001,6 +2005,7 @@ void CSGPlane::splitPolygon(CSGPolygon& polygon,
                                         nextVert->pos - currentVert->pos);
                     float t = d1 / d2;
                     CSGVertex* v1 = currentVert->lerp(*nextVert, t);
+                    v1->isNew = true;
                     toFrontNew.push_back(v1);
                     toFront.push_back(v1);
                     CSGVertex* v2 = new CSGVertex(*v1);
@@ -2057,7 +2062,7 @@ std::list<CSGPolygon> CSGPolygon::extractFromMesh(PolyMesh& mesh) {
     for(auto fh : mesh.faces()) {
         std::vector<CSGVertex*> verts;
         verts.reserve(fh.valence());
-        for(auto fvh : fh.vertices_cw()) {
+        for(auto fvh : fh.vertices_ccw()) {
             verts.push_back(vertices[fvh.idx()]);
         }
         polygons.push_back(CSGPolygon(verts));
@@ -2076,19 +2081,80 @@ PolyMesh CSGPolygon::toMesh(std::list<CSGPolygon> polygons) {
     mesh.request_vertex_normals();
     mesh.request_vertex_colors();
     mesh.request_face_normals();
+    auto isNewProp = OpenMesh::getOrMakeProperty<PolyMesh::VertexHandle, bool>
+        (mesh, "is_new");
+    std::list<CSGVertex*> verts;
+    std::list<CSGVertex*> vertsToDelete;
+    std::unordered_map<PolyMesh::VertexHandle, PolyMesh::VertexHandle> vertReplace;
     for(auto poly : polygons) {
-        std::vector<PolyMesh::VertexHandle> verts;
-        verts.reserve(poly.verts.size());
         for(auto vert : poly.verts) {
             if(vert->vh == PolyMesh::InvalidVertexHandle) {
                 vert->vh = mesh.add_vertex(vec3ToPoint(vert->pos));
                 mesh.set_normal(vert->vh, vec3ToPoint(vert->normal));
+                isNewProp[vert->vh] = vert->isNew;
+                verts.push_back(vert);
             }
-            verts.push_back(vert->vh);
         }
-        PolyMesh::FaceHandle fh = mesh.add_face(verts);
+    }
+    float threshold = 1e-5;
+    for(auto *v : verts) {
+        for(auto &poly : polygons) {
+            int numVerts = poly.verts.size();
+            for (int i = 0; i < numVerts; i++) {
+                int j = (i + 1) % numVerts;
+                CSGVertex* currentVert = poly.verts[i];
+                CSGVertex* nextVert = poly.verts[j];
+                if(glm::distance(v->pos, currentVert->pos) < threshold ||
+                   glm::distance(v->pos, nextVert->pos) < threshold)
+                    continue;
+                if(isPointLyingOnSegment(v->pos, currentVert->pos,
+                                         nextVert->pos, threshold)) {
+                    poly.verts.insert(poly.verts.begin() + i + 1, v);
+                    break;
+                }
+            }
+        }
+    }
+    for(auto v1 : verts) {
+        if(!v1->isNew)
+            continue;
+        if(vertReplace.find(v1->vh) != vertReplace.end())
+            continue;
+        PolyMesh::VertexHandle newVert = PolyMesh::InvalidVertexHandle;
+        for(auto v2 : verts) {
+            if(v1 == v2)
+                continue;
+            if(vertReplace.find(v2->vh) != vertReplace.end())
+                continue;
+            if(glm::distance(v1->pos, v2->pos) < threshold) {
+                if(newVert == PolyMesh::InvalidVertexHandle) {
+                    newVert = mesh.add_vertex(vec3ToPoint(v1->pos));
+                    mesh.set_normal(newVert, vec3ToPoint(v1->normal));
+                    isNewProp[newVert] = true;
+                    vertReplace[v1->vh] = newVert;
+                }
+                vertReplace[v2->vh] = newVert;
+                vertsToDelete.push_back(v2);
+            }
+        }
+    }
+    for(auto vert : vertsToDelete)
+        mesh.delete_vertex(vert->vh);
+    for(auto poly : polygons) {
+        std::vector<PolyMesh::VertexHandle> vhs;
+        vhs.reserve(poly.verts.size());
+        for(auto vert : poly.verts) {
+            PolyMesh::VertexHandle vh = vert->vh;
+            if(vertReplace.find(vh) != vertReplace.end()) {
+                PolyMesh::VertexHandle rep = vertReplace[vh];
+                vh = rep;
+            }
+            vhs.push_back(vh);
+        }
+        PolyMesh::FaceHandle fh = mesh.add_face(vhs);
         mesh.set_normal(fh, vec3ToPoint(poly.plane.normal));
     }
+    mesh.update_normals();
     return mesh;
 }
 
@@ -2141,7 +2207,7 @@ void BSPNode::clipTo(BSPNode* node) {
 }
 
 void BSPNode::invert() {
-    for(auto poly : this->polygons) {
+    for(auto& poly : this->polygons) {
         poly.flip();
     }
     this->plane->flip();
@@ -2253,6 +2319,63 @@ PolyMesh subtractMeshes(PolyMesh& a, PolyMesh& b) {
     BSPNode* bspB = BSPNode::fromMesh(b);
     subtractBSP(bspA, bspB);
     PolyMesh mesh = CSGPolygon::toMesh(bspA->allPolygons());
+    postProcessBooleanMesh(mesh);
     BSPNode::deepDelete({bspA, bspB});
     return mesh;
+}
+
+void postProcessBooleanMesh(PolyMesh& mesh) {
+    return;
+    const float threshold = 1e-5;
+    auto isNewProp = OpenMesh::getOrMakeProperty<PolyMesh::VertexHandle, bool>
+        (mesh, "is_new");
+    // Split edges
+    for(auto vh : mesh.vertices()) {
+        if(!isNewProp[vh] || vh.deleted())
+            continue;
+        glm::vec3 point = vec3FromPoint(mesh.point(vh));
+        for(auto eh : mesh.edges()) {
+            if(eh.deleted())
+                continue;
+            if(vh.idx() == eh.v0().idx() || vh.idx() == eh.v1().idx())
+                continue;
+            PolyMesh::Point p1 = mesh.point(eh.v0());
+            PolyMesh::Point p2 = mesh.point(eh.v1());
+            PolyMesh::VertexHandle v1 = eh.v0();
+            PolyMesh::VertexHandle v2 = eh.v1();
+            if(isPointLyingOnSegment(point,
+                                     vec3FromPoint(mesh.point(eh.v0())),
+                                     vec3FromPoint(mesh.point(eh.v1()))),
+                                     threshold) {
+                mesh.split_edge(eh, vh);
+                break;
+            }
+        }
+    }
+    auto polygons = CSGPolygon::extractFromMesh(mesh);
+    
+    mesh = CSGPolygon::toMesh(polygons);
+//    // Merge vertices that are in the same position
+//    for(auto vh : mesh.vertices()) {
+//        if(/*!isNewProp[vh] ||*/ vh.deleted())
+//            continue;
+//        // TODO: replace nested loop with KD tree traversal
+//        for(auto vh2 : mesh.vertices()) {
+//            if(vh == vh2)
+//                continue;
+//            if((mesh.point(vh) - mesh.point(vh2)).length() > threshold)
+//                continue;
+//            std::list<PolyMesh::FaceHandle> faces;
+//            for(auto fh : vh2.faces_cw())
+//                faces.push_back(fh);
+//            for(auto fh : faces) {
+//                swapFaceVertex(fh, vh2, vh, mesh);
+//            }
+//            faces.clear();
+//            for(auto fh : vh2.faces_cw())
+//                faces.push_back(fh);
+//
+//            mesh.delete_vertex(vh2);
+//        }
+//    }
 }
